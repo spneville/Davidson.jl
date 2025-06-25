@@ -3,6 +3,9 @@ mutable struct DavidsonCache <: Cache
     # Matrix-vector multiplication function
     f::Function
 
+    # Diagonal of the matrix whose eigenpairs are sought
+    hdiag::Vector{Float64}
+    
     # Number of roots to compute
     nroots::Int64
 
@@ -45,10 +48,11 @@ mutable struct DavidsonCache <: Cache
     nconv::Int64
     nnew::Int64
     nsigma::Int64
-    iconv::Vector{Float64}
+    iconv::Vector{Int64}
     
     # Inner constructor
-    function DavidsonCache(f::Function, nroots::Int64, matdim::Int64,
+    function DavidsonCache(f::Function, hdiag::Vector{Float64},
+                           nroots::Int64, matdim::Int64,
                            blocksize::Int64, maxvec::Int64, tol::Float64,
                            niter::Int64)
 
@@ -76,10 +80,10 @@ mutable struct DavidsonCache <: Cache
         nconv = 0
         nnew = 0
         nsigma = 0
-        iconv = Vector{Float64}(undef, blocksize)
+        iconv = Vector{Int64}(undef, blocksize)
         
-        new(f, nroots, matdim, blocksize, maxvec, tol, niter, bvec,
-            sigvec, Gmat, alpha, rho, rho1, rnorm, work, work2,
+        new(f, hdiag, nroots, matdim, blocksize, maxvec, tol, niter,
+            bvec, sigvec, Gmat, alpha, rho, rho1, rnorm, work, work2,
             currdim, nconv, nnew, nsigma, iconv)
         
     end

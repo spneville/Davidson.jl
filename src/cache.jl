@@ -1,4 +1,4 @@
-mutable struct DavidsonCache <: Cache
+mutable struct DavidsonCache{Float64} <: Cache
 
     # Matrix-vector multiplication function
     f::Function
@@ -51,10 +51,10 @@ mutable struct DavidsonCache <: Cache
     iconv::Vector{Int64}
     
     # Inner constructor
-    function DavidsonCache(f::Function, hdiag::Vector{Float64},
-                           nroots::Int64, matdim::Int64,
-                           blocksize::Int64, maxvec::Int64, tol::Float64,
-                           niter::Int64)
+    function DavidsonCache{Float64}(f::Function, hdiag::Vector{Float64},
+                                    nroots::Int64, matdim::Int64,
+                                    blocksize::Int64, maxvec::Int64,
+                                    tol::Float64, niter::Int64)
 
         # Subspace vectors
         bvec = Matrix{Float64}(undef, matdim, maxvec)

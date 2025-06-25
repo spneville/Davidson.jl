@@ -1,5 +1,6 @@
 module GenDav
 
+using LinearAlgebra
 using UnPack
 
 abstract type Cache end

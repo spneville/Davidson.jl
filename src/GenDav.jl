@@ -8,7 +8,7 @@ abstract type Cache end
 export solver
 export DavidsonCache
 
-include("solver.jl")
 include("cache.jl")
+include("solver.jl")
 
 end

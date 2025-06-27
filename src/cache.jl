@@ -1,10 +1,13 @@
-mutable struct DavidsonCache{Float64} <: Cache
-
+mutable struct DavidsonCache{T} <: Cache
+    
+    # Type parameter
+    T::Type
+    
     # Matrix-vector multiplication function
     f::Function
 
     # Diagonal of the matrix whose eigenpairs are sought
-    hdiag::Vector{Float64}
+    hdiag::Vector{T}
     
     # Number of roots to compute
     nroots::Int64
@@ -25,23 +28,23 @@ mutable struct DavidsonCache{Float64} <: Cache
     niter::Int64
 
     # Subspace vectors
-    bvec::Matrix{Float64}
+    bvec::Matrix{T}
         
     # Sigma vectors
-    sigvec::Matrix{Float64}
+    sigvec::Matrix{T}
     
     # Subspace Hamiltonian matrix and eigenpairs
-    Gmat::Matrix{Float64}
-    alpha::Matrix{Float64}
-    rho::Vector{Float64}
-    rho1::Vector{Float64}
+    Gmat::Matrix{T}
+    alpha::Vector{T}
+    rho::Vector{T}
+    rho1::Vector{T}
     
     # Residual norms
     rnorm::Vector{Float64}
     
     # Work arrays
-    work::Vector{Float64}
-    work2::Matrix{Float64}
+    work::Vector{T}
+    work2::Matrix{T}
     
     # Counters, etc.
     currdim::Int64
@@ -49,31 +52,40 @@ mutable struct DavidsonCache{Float64} <: Cache
     nnew::Int64
     nsigma::Int64
     iconv::Vector{Int64}
+
+    # LAPACK ?syev and ?heev work arrays
+    lwork::Int32
+    evwork::Vector{T}
+    info::Int32
     
     # Inner constructor
-    function DavidsonCache{Float64}(f::Function, hdiag::Vector{Float64},
-                                    nroots::Int64, matdim::Int64,
-                                    blocksize::Int64, maxvec::Int64,
-                                    tol::Float64, niter::Int64)
+    function DavidsonCache{T}(f::Function,
+                              hdiag::Vector{T},
+                              nroots::Int64,
+                              matdim::Int64,
+                              blocksize::Int64,
+                              maxvec::Int64,
+                              tol::Float64,
+                              niter::Int64) where T <: Union{Complex, AbstractFloat}
 
         # Subspace vectors
-        bvec = Matrix{Float64}(undef, matdim, maxvec)
+        bvec = Matrix{T}(undef, matdim, maxvec)
         
         # Sigma vectors
-        sigvec = Matrix{Float64}(undef, matdim, maxvec)
+        sigvec = Matrix{T}(undef, matdim, maxvec)
         
         # Subspace Hamiltonian matrix and eigenpairs
-        Gmat = Matrix{Float64}(undef, maxvec,maxvec)
-        alpha = Matrix{Float64}(undef, maxvec,maxvec)
-        rho = Vector{Float64}(undef, maxvec)
-        rho1 = Vector{Float64}(undef, maxvec)
+        Gmat = Matrix{T}(undef, maxvec, maxvec)
+        alpha = Vector{T}(undef, maxvec*maxvec)
+        rho = Vector{T}(undef, maxvec)
+        rho1 = Vector{T}(undef, maxvec)
         
         # Residual norms
         rnorm = Vector{Float64}(undef, blocksize)
         
         # Work arrays
-        work = Vector{Float64}(undef, matdim)
-        work2 = Matrix{Float64}(undef, matdim,blocksize)
+        work = Vector{T}(undef, matdim)
+        work2 = Matrix{T}(undef, matdim,blocksize)
         
         # Counters, etc.
         currdim = 0
@@ -81,10 +93,15 @@ mutable struct DavidsonCache{Float64} <: Cache
         nnew = 0
         nsigma = 0
         iconv = Vector{Int64}(undef, blocksize)
-        
-        new(f, hdiag, nroots, matdim, blocksize, maxvec, tol, niter,
-            bvec, sigvec, Gmat, alpha, rho, rho1, rnorm, work, work2,
-            currdim, nconv, nnew, nsigma, iconv)
+
+        # LAPACK ?syev and ?heev work arrays
+        lwork::Int32 = 3 * maxvec
+        evwork = Vector{T}(undef, lwork)
+        info::Int32 = 0
+
+        new{T}(T, f, hdiag, nroots, matdim, blocksize, maxvec, tol, niter,
+               bvec, sigvec, Gmat, alpha, rho, rho1, rnorm, work, work2,
+               currdim, nconv, nnew, nsigma, iconv, lwork, evwork, info)
         
     end
         

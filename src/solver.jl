@@ -28,6 +28,10 @@ function solver(f::Function,
     vectors = Matrix{T}(undef, matdim, nroots)
     eigenvectors!(vectors, cache)
 
+
+    println("\nWe need to sort out the inverse square root of the overlap matrix\n")
+    
+    
     return vectors, values
     
 end
@@ -90,9 +94,6 @@ function run_gendav(cache::Cache, verbose::Bool)
         
         # Compute the new elements in the subspace Hamiltonian
         # matrix
-        #
-        # *** We need to avoid slicing in this function ***
-        #
         subspace_matrix(cache)
 
         # Compute the eigenpairs of the subspace Hamiltonian
@@ -154,15 +155,17 @@ function subspace_matrix(cache::DavidsonCache{T}) where T <: AbstractFloat
     @unpack currdim, nnew, zero, one = cache
 
     # Work array
-    bsigma = Matrix{cache.T}(undef, currdim, nnew)
+    bsigma = reshape(view(cache.work3, 1:currdim*nnew),
+                     (currdim, nnew))
     fill!(bsigma, 0.0)
-    
+
     # b^T sigma matrix product
     i1 = currdim - nnew + 1
     i2 = currdim
-    BLAS.gemm!('T', 'N', one, cache.bvec[:,1:i2],
-               cache.sigvec[:,i1:i2], zero, bsigma)
-
+    b = view(cache.bvec, :, 1:i2)
+    σ = view(cache.sigvec, :, i1:i2)
+    BLAS.gemm!('T', 'N', one, b, σ, zero, bsigma)
+    
     # Fill in the Gmat array
     for i in 1:cache.currdim
         for j in 1:cache.nnew
@@ -214,7 +217,7 @@ function residual_vectors(cache::Cache)
     rho = view(cache.rho, 1:currdim)
     
     # Working arrays
-    alpha_bar = reshape(view(cache.alpha_bar, 1:currdim*blocksize),
+    alpha_bar = reshape(view(cache.work3, 1:currdim*blocksize),
                         (currdim, blocksize))
     
     #
@@ -337,7 +340,7 @@ end
 
 function subspace_vectors(cache::Cache)
 
-    @unpack T, currdim, nnew, zero, one = cache
+    @unpack T, matdim, currdim, nnew, zero, one = cache
 
     bvec = cache.bvec
     sigvec = cache.sigvec
@@ -362,31 +365,33 @@ function subspace_vectors(cache::Cache)
 
     # Overlaps between the previous subspace vectors and the correction
     # vectors
-    Smat = Matrix{T}(undef, currdim, nnew)
+    Smat = reshape(view(cache.work3, 1:currdim*nnew), (currdim, nnew))
+    
     bprev = view(bvec, :, 1:currdim)
     bnew = view(bvec, :, ki:kf)
     BLAS.gemm!('T', 'N', one, bprev, bnew, zero, Smat)
 
     # GS orthogonalisation of the correction vectors against the previous
     # subspace vectors
-
-    println("\nWe need to avoid:")
-    println("(1) Type instability in Smat (use a cached work array)")
-    println("(2) Slicing of the bvec matrix\n")
-    exit()
-        
     k1 = 0
     for k in ki:kf
         k1 += 1
         for i in 1:currdim
-            bvec[:,k] = bvec[:,k] - Smat[i,k1] * bvec[:,i]
+            for j in 1:matdim
+                bvec[j,k] -= Smat[i,k1] * bvec[j,i]
+            end
+            
         end
-        bvec[:,k] = bvec[:,k] / sqrt(dot(bvec[:,k], bvec[:,k]))
+        bk = reshape(view(bvec, :, k:k), (matdim))
+        len_bk = sqrt(dot(bk, bk))
+        for j in 1:matdim
+            bk[j] /= len_bk
+        end
     end
     
     # Overlaps between the intermediately orthogonalised correction
     # vectors
-    Smat = Matrix{T}(undef, nnew, nnew)
+    Smat = reshape(view(cache.work3, 1:nnew*nnew), (nnew, nnew))
     BLAS.gemm!('T', 'N', one, bnew, bnew, zero, Smat)
 
     # Inverse square root of the overlap matrix
@@ -397,10 +402,11 @@ function subspace_vectors(cache::Cache)
     w2 = view(work2, :, 1:nnew)
     BLAS.gemm!('N', 'N', one, bnew, Sinvsq, zero, w2)
     copy!(bnew, w2)
-
+        
 end
 
-function invsqrt_matrix(mat::Matrix{T}, dim::Int64) where T <: Union{Float32, Float64}
+function invsqrt_matrix(mat::AbstractMatrix{T},
+                        dim::Int64) where T <: Union{Float32, Float64}
 
     # Diagonalisation of the input matrix
     F = eigen(mat)
@@ -446,16 +452,13 @@ function subspace_collapse(cache::Cache)
     alpha = reshape(view(cache.alpha, 1:currdim^2), (currdim, currdim))
     bvec = cache.bvec
     
-    # Loop over Ritz vectors
-    for k in 1:blocksize
-    
-       # Compute the kth Ritz vector 
-        for i in 1:currdim
-            sigvec[:,k] = sigvec[:,k] + alpha[i,k] * bvec[:,i]
-        end
-       
-    end
-
+    # Compute the Ritz vectors
+    @unpack one, zero = cache
+    b = view(bvec, :, 1:currdim)
+    α = view(alpha, 1:currdim, 1:blocksize)
+    σ = view(sigvec, :, 1:blocksize)
+    BLAS.gemm!('N', 'N', one, b, α, zero, σ)
+            
     #
     # Collapse the subspace to be spanned by the lowest-lying Ritz vectors
     #
@@ -465,10 +468,11 @@ function subspace_collapse(cache::Cache)
     cache.nnew = cache.blocksize
 
     # Save the Ritz vectors as the new subspace vectors
-    for k in 1:blocksize
-       bvec[:,k] = sigvec[:,k]
-    end
-
+    b = view(bvec, :, 1:blocksize)
+    σ = view(sigvec, :, 1:blocksize)
+    copy!(b, σ)
+    
+    
 end
 
 function eigenvectors!(vectors::Matrix{T},

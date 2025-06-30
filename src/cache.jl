@@ -43,9 +43,9 @@ mutable struct DavidsonCache{T} <: Cache
     rnorm::Vector{Float64}
     
     # Work arrays
-    alpha_bar::Vector{T}
     work::Vector{T}
     work2::Matrix{T}
+    work3::Vector{T}
     
     # Counters, etc.
     currdim::Int64
@@ -90,9 +90,9 @@ mutable struct DavidsonCache{T} <: Cache
         rnorm = Vector{Float64}(undef, blocksize)
         
         # Work arrays
-        alpha_bar = Vector{T}(undef, maxvec*blocksize)
         work = Vector{T}(undef, matdim)
         work2 = Matrix{T}(undef, matdim,blocksize)
+        work3 = Vector{T}(undef, maxvec*blocksize)
         
         # Counters, etc.
         currdim = 0
@@ -112,8 +112,8 @@ mutable struct DavidsonCache{T} <: Cache
         one::T = 1.0
         
         new{T}(T, f, hdiag, nroots, matdim, blocksize, maxvec, tol, niter,
-               bvec, sigvec, Gmat, alpha, rho, rho1, rnorm, alpha_bar,
-               work, work2, currdim, nconv, nnew, nsigma, iconv, lwork,
+               bvec, sigvec, Gmat, alpha, rho, rho1, rnorm, work, work2,
+               work3, currdim, nconv, nnew, nsigma, iconv, lwork,
                evwork, info, minus_one, zero, one)
         
     end

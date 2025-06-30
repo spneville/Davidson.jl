@@ -1,4 +1,4 @@
-module GenDav
+module Davidson
 
 using LinearAlgebra
 using UnPack

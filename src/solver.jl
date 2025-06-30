@@ -90,7 +90,10 @@ function run_gendav(cache::Cache, verbose::Bool)
         
         # Compute the new elements in the subspace Hamiltonian
         # matrix
-        subspace_hamiltonian(cache)
+        #
+        # *** We need to avoid slicing in this function ***
+        #
+        subspace_matrix(cache)
 
         # Compute the eigenpairs of the subspace Hamiltonian
         subspace_diag(cache)
@@ -145,7 +148,7 @@ function sigma_vectors(cache::Cache)
 
 end
 
-function subspace_hamiltonian(cache::DavidsonCache{T}) where T <: AbstractFloat
+function subspace_matrix(cache::DavidsonCache{T}) where T <: AbstractFloat
 
     # Dimensions
     @unpack currdim, nnew, zero, one = cache
@@ -203,7 +206,7 @@ end
 function residual_vectors(cache::Cache)
 
     @unpack matdim, currdim, blocksize, nnew, tol, minus_one, zero, one = cache
-    
+
     # Subspace eigenvectors    
     alpha = reshape(view(cache.alpha, 1:currdim^2), (currdim, currdim))
 
@@ -211,19 +214,20 @@ function residual_vectors(cache::Cache)
     rho = view(cache.rho, 1:currdim)
     
     # Working arrays
-    alpha_bar = Matrix{cache.T}(undef, currdim, blocksize)
-
+    alpha_bar = reshape(view(cache.alpha_bar, 1:currdim*blocksize),
+                        (currdim, blocksize))
+    
     #
     # Compute the residual vectors
     # r_k = Sum_i alpha_ik * (sigma_i - rho_k b_i),
     #
     # (alpha_bar)_ik = alpha_ik * rho_K
     for k in 1:blocksize
-       for i in 1:currdim
-           alpha_bar[i,k] = alpha[i,k] * rho[k]
-       end
+        for i in 1:currdim
+            alpha_bar[i,k] = alpha[i,k] * rho[k]
+        end
     end
-
+    
     # sigma alpha
     σ = view(cache.sigvec, 1:matdim, 1:currdim)
     α = reshape(view(cache.alpha, 1:currdim*blocksize),
@@ -234,7 +238,7 @@ function residual_vectors(cache::Cache)
     # sigma alpha - b alpha_bar
     bvec = view(cache.bvec, 1:matdim, 1:currdim)
     BLAS.gemm!('N', 'N', minus_one, bvec, alpha_bar, one, work2)
-
+        
     #
     # Save the residual vectors for the unconverged roots
     #
@@ -250,11 +254,13 @@ function residual_vectors(cache::Cache)
     # Loop over roots
     nnew = 0
     iconv .= 0
+
     for k in 1:blocksize
 
         # Residual norm
-        rnorm[k] = sqrt(dot(work2[:,k], work2[:,k]))
-
+        w2 = view(work2, :, k:k)
+        rnorm[k] = sqrt(dot(w2, w2))
+        
         # Update the convergence information
         if rnorm[k] < tol iconv[k] = 1 end
     
@@ -263,13 +269,18 @@ function residual_vectors(cache::Cache)
         if iconv[k] == 0
 
             nnew = nnew + 1
-            bvec[:,ki-1+nnew] = work2[:,k]
+
+            k1 = ki-1+nnew
+            b = view(bvec, :, k1:k1)
+            w2 = view(work2, :, k:k)
+            b = copy!(b, w2) 
+            
             rho1[nnew] = rho[k]
 
         end
-       
+
     end
-        
+    
 end
 
 function print_report(k::Int64, cache::Cache)
@@ -358,6 +369,12 @@ function subspace_vectors(cache::Cache)
 
     # GS orthogonalisation of the correction vectors against the previous
     # subspace vectors
+
+    println("\nWe need to avoid:")
+    println("(1) Type instability in Smat (use a cached work array)")
+    println("(2) Slicing of the bvec matrix\n")
+    exit()
+        
     k1 = 0
     for k in ki:kf
         k1 += 1
@@ -366,7 +383,7 @@ function subspace_vectors(cache::Cache)
         end
         bvec[:,k] = bvec[:,k] / sqrt(dot(bvec[:,k], bvec[:,k]))
     end
-
+    
     # Overlaps between the intermediately orthogonalised correction
     # vectors
     Smat = Matrix{T}(undef, nnew, nnew)

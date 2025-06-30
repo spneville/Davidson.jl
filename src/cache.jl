@@ -43,6 +43,7 @@ mutable struct DavidsonCache{T} <: Cache
     rnorm::Vector{Float64}
     
     # Work arrays
+    alpha_bar::Vector{T}
     work::Vector{T}
     work2::Matrix{T}
     
@@ -89,6 +90,7 @@ mutable struct DavidsonCache{T} <: Cache
         rnorm = Vector{Float64}(undef, blocksize)
         
         # Work arrays
+        alpha_bar = Vector{T}(undef, maxvec*blocksize)
         work = Vector{T}(undef, matdim)
         work2 = Matrix{T}(undef, matdim,blocksize)
         
@@ -110,9 +112,9 @@ mutable struct DavidsonCache{T} <: Cache
         one::T = 1.0
         
         new{T}(T, f, hdiag, nroots, matdim, blocksize, maxvec, tol, niter,
-               bvec, sigvec, Gmat, alpha, rho, rho1, rnorm, work, work2,
-               currdim, nconv, nnew, nsigma, iconv, lwork, evwork, info,
-               minus_one, zero, one)
+               bvec, sigvec, Gmat, alpha, rho, rho1, rnorm, alpha_bar,
+               work, work2, currdim, nconv, nnew, nsigma, iconv, lwork,
+               evwork, info, minus_one, zero, one)
         
     end
         

@@ -9,6 +9,7 @@ export solver
 export DavidsonCache
 
 include("cache.jl")
+include("wrapper.jl")
 include("solver.jl")
 
 end

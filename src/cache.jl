@@ -57,6 +57,11 @@ mutable struct DavidsonCache{T} <: Cache
     lwork::Int32
     evwork::Vector{T}
     info::Int32
+
+    # -1.0, 0.0, and +1.0
+    minus_one::T
+    zero::T
+    one::T
     
     # Inner constructor
     function DavidsonCache{T}(f::Function,
@@ -99,9 +104,15 @@ mutable struct DavidsonCache{T} <: Cache
         evwork = Vector{T}(undef, lwork)
         info::Int32 = 0
 
+        # -1.0, 0.0, and +1.0
+        minus_one::T = -1.0
+        zero::T = 0.0
+        one::T = 1.0
+        
         new{T}(T, f, hdiag, nroots, matdim, blocksize, maxvec, tol, niter,
                bvec, sigvec, Gmat, alpha, rho, rho1, rnorm, work, work2,
-               currdim, nconv, nnew, nsigma, iconv, lwork, evwork, info)
+               currdim, nconv, nnew, nsigma, iconv, lwork, evwork, info,
+               minus_one, zero, one)
         
     end
         

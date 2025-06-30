@@ -20,6 +20,15 @@ function solver(f::Function,
 
     # Run the generalised Davidson algorithm
     run_gendav(cache, verbose::Bool)
+
+    # Eigenvalues
+    values = cache.rho[1:nroots]
+    
+    # Get the eigenvectors
+    vectors = Matrix{T}(undef, matdim, nroots)
+    eigenvectors!(vectors, cache)
+
+    return vectors, values
     
 end
 
@@ -116,7 +125,7 @@ function run_gendav(cache::Cache, verbose::Bool)
         if k == cache.niter @warn "Not all roots converged" end
         
     end
-    
+
 end
 
 function sigma_vectors(cache::Cache)
@@ -139,7 +148,7 @@ end
 function subspace_hamiltonian(cache::DavidsonCache{T}) where T <: AbstractFloat
 
     # Dimensions
-    @unpack currdim, nnew = cache
+    @unpack currdim, nnew, zero, one = cache
 
     # Work array
     bsigma = Matrix{cache.T}(undef, currdim, nnew)
@@ -148,8 +157,8 @@ function subspace_hamiltonian(cache::DavidsonCache{T}) where T <: AbstractFloat
     # b^T sigma matrix product
     i1 = currdim - nnew + 1
     i2 = currdim
-    BLAS.gemm!('T', 'N', 1.0, cache.bvec[:,1:i2], cache.sigvec[:,i1:i2],
-               0.0, bsigma)
+    BLAS.gemm!('T', 'N', one, cache.bvec[:,1:i2],
+               cache.sigvec[:,i1:i2], zero, bsigma)
 
     # Fill in the Gmat array
     for i in 1:cache.currdim
@@ -162,7 +171,7 @@ function subspace_hamiltonian(cache::DavidsonCache{T}) where T <: AbstractFloat
 
 end
 
-function subspace_diag(cache::DavidsonCache{T}) where T <: AbstractFloat
+function subspace_diag(cache::DavidsonCache{T}) where T <: Union{Float32, Float64}
 
     currdim = cache.currdim
     
@@ -184,33 +193,16 @@ function subspace_diag(cache::DavidsonCache{T}) where T <: AbstractFloat
         end
     end
 
-    ccall((:dsyev_, "libblastrampoline"),
-          Cvoid,
-          (Cstring,      # JOBZ
-           Cstring,      # UPLO
-           Ref{Int32},   # N
-           Ptr{Float64}, # A
-           Ref{Int32},   # LDA
-           Ptr{Float64}, # W
-           Ptr{Float64}, # WORK
-           Ref{Int32},   # LWORK
-           Ref{Int32}),  #INFO
-          JOBZ,
-          UPLO,
-          N,
-          A,
-          LDA,
-          W,
-          WORK,
-          LWORK,
-          INFO)
+    # Call to ?syev
+    syev!(JOBZ, UPLO, N, A, LDA, W, WORK, LWORK, INFO)
     
 end
 
+
+
 function residual_vectors(cache::Cache)
 
-    # Dimensions
-    @unpack matdim, currdim, blocksize, nnew, tol = cache
+    @unpack matdim, currdim, blocksize, nnew, tol, minus_one, zero, one = cache
     
     # Subspace eigenvectors    
     alpha = reshape(view(cache.alpha, 1:currdim^2), (currdim, currdim))
@@ -237,11 +229,11 @@ function residual_vectors(cache::Cache)
     α = reshape(view(cache.alpha, 1:currdim*blocksize),
                 (currdim, blocksize))
     work2 = cache.work2
-    BLAS.gemm!('N', 'N', 1.0, σ, α, 0.0, work2)
+    BLAS.gemm!('N', 'N', one, σ, α, zero, work2)
     
     # sigma alpha - b alpha_bar
     bvec = view(cache.bvec, 1:matdim, 1:currdim)
-    BLAS.gemm!('N', 'N', -1.0, bvec, alpha_bar, 1.0, work2)
+    BLAS.gemm!('N', 'N', minus_one, bvec, alpha_bar, one, work2)
 
     #
     # Save the residual vectors for the unconverged roots
@@ -334,7 +326,7 @@ end
 
 function subspace_vectors(cache::Cache)
 
-    @unpack T, currdim, nnew = cache
+    @unpack T, currdim, nnew, zero, one = cache
 
     bvec = cache.bvec
     sigvec = cache.sigvec
@@ -362,7 +354,7 @@ function subspace_vectors(cache::Cache)
     Smat = Matrix{T}(undef, currdim, nnew)
     bprev = view(bvec, :, 1:currdim)
     bnew = view(bvec, :, ki:kf)
-    BLAS.gemm!('T', 'N', 1.0, bprev, bnew, 0.0, Smat)
+    BLAS.gemm!('T', 'N', one, bprev, bnew, zero, Smat)
 
     # GS orthogonalisation of the correction vectors against the previous
     # subspace vectors
@@ -378,7 +370,7 @@ function subspace_vectors(cache::Cache)
     # Overlaps between the intermediately orthogonalised correction
     # vectors
     Smat = Matrix{T}(undef, nnew, nnew)
-    BLAS.gemm!('T', 'N', 1.0, bnew, bnew, 0.0, Smat)
+    BLAS.gemm!('T', 'N', one, bnew, bnew, zero, Smat)
 
     # Inverse square root of the overlap matrix
     Sinvsq = invsqrt_matrix(Smat, nnew)
@@ -386,12 +378,12 @@ function subspace_vectors(cache::Cache)
     # Symmetric orthogonalisation of the intermediately orthogonalised
     # correction vectors amongst themselves
     w2 = view(work2, :, 1:nnew)
-    BLAS.gemm!('N', 'N', 1.0, bnew, Sinvsq, 0.0, w2)    
+    BLAS.gemm!('N', 'N', one, bnew, Sinvsq, zero, w2)
     copy!(bnew, w2)
 
 end
 
-function invsqrt_matrix(mat::Matrix{Float64}, dim::Int64)
+function invsqrt_matrix(mat::Matrix{T}, dim::Int64) where T <: Union{Float32, Float64}
 
     # Diagonalisation of the input matrix
     F = eigen(mat)
@@ -399,7 +391,7 @@ function invsqrt_matrix(mat::Matrix{Float64}, dim::Int64)
     lambda = F.values
 
     # Inverse square root of the input matrix
-    dmat = Matrix{Float64}(undef, dim, dim)
+    dmat = Matrix{T}(undef, dim, dim)
     fill!(dmat, 0.0)
 
     thrsh = 1e-10
@@ -439,7 +431,7 @@ function subspace_collapse(cache::Cache)
     
     # Loop over Ritz vectors
     for k in 1:blocksize
-
+    
        # Compute the kth Ritz vector 
         for i in 1:currdim
             sigvec[:,k] = sigvec[:,k] + alpha[i,k] * bvec[:,i]
@@ -461,3 +453,17 @@ function subspace_collapse(cache::Cache)
     end
 
 end
+
+function eigenvectors!(vectors::Matrix{T},
+                       cache::Cache) where T <: Union{Complex, AbstractFloat}
+    
+    # Compute the Ritz vectors for the nroots lowest roots
+    @unpack currdim, nroots, zero, one = cache
+    alpha = reshape(view(cache.alpha, 1:currdim*nroots),
+                    (currdim, nroots))
+    bvec = view(cache.bvec, :, 1:currdim)
+
+    BLAS.gemm!('N', 'N', one, bvec, alpha, zero, vectors)
+    
+end
+

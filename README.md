@@ -1,4 +1,4 @@
-# GenDav
+# Davidson
 
 [![Stable](https://img.shields.io/badge/docs-stable-blue.svg)](https://spneville.github.io/GenDav.jl/stable/)
 [![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://spneville.github.io/GenDav.jl/dev/)

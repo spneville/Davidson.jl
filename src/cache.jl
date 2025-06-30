@@ -33,7 +33,7 @@ mutable struct DavidsonCache{T} <: Cache
     # Sigma vectors
     sigvec::Matrix{T}
     
-    # Subspace Hamiltonian matrix and eigenpairs
+    # Subspace matrix and eigenpairs
     Gmat::Matrix{T}
     alpha::Vector{T}
     rho::Vector{T}
@@ -43,10 +43,11 @@ mutable struct DavidsonCache{T} <: Cache
     rnorm::Vector{Float64}
     
     # Work arrays
-    work::Vector{T}
+    work1::Vector{T}
     work2::Matrix{T}
     work3::Vector{T}
-    
+    work4::Vector{T}
+
     # Counters, etc.
     currdim::Int64
     nconv::Int64
@@ -80,7 +81,7 @@ mutable struct DavidsonCache{T} <: Cache
         # Sigma vectors
         sigvec = Matrix{T}(undef, matdim, maxvec)
         
-        # Subspace Hamiltonian matrix and eigenpairs
+        # Subspace matrix and eigenpairs
         Gmat = Matrix{T}(undef, maxvec, maxvec)
         alpha = Vector{T}(undef, maxvec*maxvec)
         rho = Vector{T}(undef, maxvec)
@@ -90,9 +91,10 @@ mutable struct DavidsonCache{T} <: Cache
         rnorm = Vector{Float64}(undef, blocksize)
         
         # Work arrays
-        work = Vector{T}(undef, matdim)
+        work1 = Vector{T}(undef, matdim)
         work2 = Matrix{T}(undef, matdim,blocksize)
         work3 = Vector{T}(undef, maxvec*blocksize)
+        work4 = Vector{T}(undef, blocksize*blocksize)
         
         # Counters, etc.
         currdim = 0
@@ -112,9 +114,9 @@ mutable struct DavidsonCache{T} <: Cache
         one::T = 1.0
         
         new{T}(T, f, hdiag, nroots, matdim, blocksize, maxvec, tol, niter,
-               bvec, sigvec, Gmat, alpha, rho, rho1, rnorm, work, work2,
-               work3, currdim, nconv, nnew, nsigma, iconv, lwork,
-               evwork, info, minus_one, zero, one)
+               bvec, sigvec, Gmat, alpha, rho, rho1, rnorm, work1, work2,
+               work3, work4, currdim, nconv, nnew, nsigma, iconv,
+               lwork, evwork, info, minus_one, zero, one)
         
     end
         

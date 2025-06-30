@@ -27,10 +27,6 @@ function solver(f::Function,
     # Get the eigenvectors
     vectors = Matrix{T}(undef, matdim, nroots)
     eigenvectors!(vectors, cache)
-
-
-    println("\nWe need to sort out the inverse square root of the overlap matrix\n")
-    
     
     return vectors, values
     
@@ -92,11 +88,10 @@ function run_gendav(cache::Cache, verbose::Bool)
         # Compute the σ-vectors
         sigma_vectors(cache)
         
-        # Compute the new elements in the subspace Hamiltonian
-        # matrix
+        # Compute the new elements in the subspace matrix
         subspace_matrix(cache)
 
-        # Compute the eigenpairs of the subspace Hamiltonian
+        # Compute the eigenpairs of the subspace matrix
         subspace_diag(cache)
 
         # Compute the residual vectors. Note that these will be stored
@@ -395,8 +390,10 @@ function subspace_vectors(cache::Cache)
     BLAS.gemm!('T', 'N', one, bnew, bnew, zero, Smat)
 
     # Inverse square root of the overlap matrix
-    Sinvsq = invsqrt_matrix(Smat, nnew)
-
+    # Note that invsqrt_matrix will overwrite the Smat matrix
+    Sinvsq = reshape(view(cache.work4, 1:nnew*nnew), (nnew, nnew))
+    invsqrt_matrix!(Sinvsq, Smat, cache)
+    
     # Symmetric orthogonalisation of the intermediately orthogonalised
     # correction vectors amongst themselves
     w2 = view(work2, :, 1:nnew)
@@ -405,38 +402,41 @@ function subspace_vectors(cache::Cache)
         
 end
 
-function invsqrt_matrix(mat::AbstractMatrix{T},
-                        dim::Int64) where T <: Union{Float32, Float64}
+function invsqrt_matrix!(Ainvsq::AbstractMatrix{T},
+                         A::AbstractMatrix{T},
+                         cache::Cache) where T <: Union{Float32, Float64}
 
-    # Diagonalisation of the input matrix
-    F = eigen(mat)
-    eigvec = F.vectors
-    lambda = F.values
+    #
+    # N.B. this will overwrite the contents of the input matrix A
+    #
+
+    # Dimension of the input matrix
+    dim = size(A)[1]
+
+    # Eigenpairs of the input matrix
+    JOBZ = "V"
+    UPLO = "L"
+    N = dim
+    LDA = dim
+    W = view(cache.work1, 1:dim)
+    LWORK = cache.lwork
+    WORK = view(cache.evwork, 1:LWORK)
+    INFO = cache.info
+    syev!(JOBZ, UPLO, N, A, LDA, W, WORK, LWORK, INFO)
 
     # Inverse square root of the input matrix
-    dmat = Matrix{T}(undef, dim, dim)
-    fill!(dmat, 0.0)
-
-    thrsh = 1e-10
-    
-    for i in 1:dim
-
-       if lambda[i] > thrsh && lambda[i] < 0.0
-           @error "Non semi positive definite matrix encountered"
-       end
-
-        if lambda[i] > thrsh
-            dmat[i,i] = 1.0 / sqrt(abs(lambda[i]))
+    fill!(Ainvsq, 0.0)
+    for k in 1:dim
+        λinvsq = 1.0 / sqrt(abs(W[k]))
+        for j in 1:dim
+            for i in 1:dim
+                Ainvsq[j,i] += A[i,k] * A[j,k] * λinvsq
+            end
         end
-            
     end
-
-    invsqrtmat = eigvec * dmat * transpose(eigvec)
-
-    return invsqrtmat
     
 end
-
+    
 function subspace_collapse(cache::Cache)
 
     #

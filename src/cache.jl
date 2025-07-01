@@ -73,7 +73,8 @@ mutable struct DavidsonCache{T} <: Cache
                               blocksize::Int64,
                               maxvec::Int64,
                               tol::Float64,
-                              niter::Int64) where T <: Union{Complex, AbstractFloat}
+                              niter::Int64
+                              ) where T <: AllowedFloat
 
         # Subspace vectors
         bvec = Matrix{T}(undef, matdim, maxvec)

@@ -6,7 +6,8 @@ function solver(f::Function,
                 blocksize=nroots+5,
                 maxvec=4*blocksize,
                 niter=100,
-                verbose=true) where T <: Union{Complex, AbstractFloat}
+                verbose=true
+                ) where T <: AllowedFloat
 
     # Check on the input
     checkinp(nroots, blocksize, maxvec)
@@ -141,10 +142,11 @@ function sigma_vectors(cache::Cache)
     b = view(cache.bvec, :, ki:kf)
     σ = view(cache.sigvec, :, ki:kf)
     cache.f(b, σ)
-
+    
 end
 
-function subspace_matrix(cache::DavidsonCache{T}) where T <: AbstractFloat
+function subspace_matrix(cache::DavidsonCache{T}
+                         ) where T <: AbstractFloat
 
     # Dimensions
     @unpack currdim, nnew, zero, one = cache
@@ -160,7 +162,7 @@ function subspace_matrix(cache::DavidsonCache{T}) where T <: AbstractFloat
     b = view(cache.bvec, :, 1:i2)
     σ = view(cache.sigvec, :, i1:i2)
     BLAS.gemm!('T', 'N', one, b, σ, zero, bsigma)
-    
+
     # Fill in the Gmat array
     for i in 1:cache.currdim
         for j in 1:cache.nnew
@@ -172,7 +174,7 @@ function subspace_matrix(cache::DavidsonCache{T}) where T <: AbstractFloat
 
 end
 
-function subspace_diag(cache::DavidsonCache{T}) where T <: Union{Float32, Float64}
+function subspace_diag(cache::DavidsonCache{T}) where T <: AllowedFloat
 
     currdim = cache.currdim
     
@@ -403,8 +405,8 @@ function subspace_vectors(cache::Cache)
 end
 
 function invsqrt_matrix!(Ainvsq::AbstractMatrix{T},
-                         A::AbstractMatrix{T},
-                         cache::Cache) where T <: Union{Float32, Float64}
+                         A::AbstractMatrix{T}, cache::Cache
+                         ) where T <: AllowedFloat
 
     #
     # N.B. this will overwrite the contents of the input matrix A
@@ -475,8 +477,8 @@ function subspace_collapse(cache::Cache)
     
 end
 
-function eigenvectors!(vectors::Matrix{T},
-                       cache::Cache) where T <: Union{Complex, AbstractFloat}
+function eigenvectors!(vectors::Matrix{T}, cache::Cache
+                       ) where T <: AllowedFloat
     
     # Compute the Ritz vectors for the nroots lowest roots
     @unpack currdim, nroots, zero, one = cache

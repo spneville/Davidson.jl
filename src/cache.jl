@@ -74,8 +74,13 @@ mutable struct DavidsonCache{T} <: Cache
                               maxvec::Int64,
                               tol::Float64,
                               niter::Int64
-                              ) where T <: AllowedFloat
+                              ) where T <: AllowedTypes
 
+        if T <: AllowedComplex
+            println("We need to determine which arrays need to be Complex...")
+            exit()
+        end
+            
         # Subspace vectors
         bvec = Matrix{T}(undef, matdim, maxvec)
         
@@ -120,5 +125,5 @@ mutable struct DavidsonCache{T} <: Cache
                lwork, evwork, info, minus_one, zero, one)
         
     end
-        
+
 end

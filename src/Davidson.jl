@@ -5,6 +5,7 @@ using UnPack
 
 AllowedFloat = Union{Float32, Float64}
 AllowedComplex = Union{ComplexF32, ComplexF64}
+AllowedTypes = Union{AllowedFloat, AllowedComplex}
 
 abstract type Cache end
 

@@ -6,21 +6,21 @@ function solver(f::Function,
                 blocksize=nroots+5,
                 maxvec=4*blocksize,
                 niter=100,
-                verbose=true
-                ) where T <: AllowedFloat
+                verbose=false
+                ) where T <: AllowedTypes
 
     # Check on the input
-    checkinp(nroots, blocksize, maxvec)
+    checkinp(nroots, blocksize, maxvec, matdim)
 
     # Davidson cache
     cache = DavidsonCache{T}(f, hdiag, nroots, matdim, blocksize,
-                                   maxvec, tol, niter)
+                             maxvec, tol, niter)
 
     # Construct the guess vectors
     guessvec(cache)
 
     # Run the generalised Davidson algorithm
-    run_gendav(cache, verbose::Bool)
+    run_gendav(cache, verbose)
 
     # Eigenvalues
     values = cache.rho[1:nroots]
@@ -33,7 +33,8 @@ function solver(f::Function,
     
 end
 
-function checkinp(nroots::Int64, blocksize::Int64, maxvec::Int64)
+function checkinp(nroots::Int64, blocksize::Int64, maxvec::Int64,
+                  matdim::Int64)
 
     # The block size must be greater than or equal to the number
     # of roots
@@ -47,7 +48,20 @@ function checkinp(nroots::Int64, blocksize::Int64, maxvec::Int64)
         @error "The maximum subspace dimension must be a multiple" *
             " of the block size"
     end
-    
+
+    # The maximum subspace dimension must be greater than the blocksize
+    if maxvec <= blocksize
+        @error "The maximum subspace dimension must be greater" *
+            " than the blocksize"
+    end
+
+    # The maximum subspace dimension cannot be greater than the matrix
+    # dimension
+    if maxvec > matdim
+        @error "The maximum subspace dimension cannot be greater" *
+            " than the matrix dimension"
+    end
+        
 end
 
 function guessvec(cache::Cache)

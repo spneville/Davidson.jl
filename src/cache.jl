@@ -100,7 +100,7 @@ mutable struct DavidsonCache{T, RT} <: Cache
         rnorm = Vector{Float64}(undef, blocksize)
         
         # Work arrays
-        work1 = Vector{RT}(undef, blocksize)
+        work1 = Vector{RT}(undef, matdim)
         work2 = Matrix{T}(undef, matdim,blocksize)
         work3 = Vector{T}(undef, maxvec*blocksize)
         work4 = Vector{T}(undef, blocksize*blocksize)

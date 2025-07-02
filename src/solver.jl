@@ -73,14 +73,20 @@ function guessvec(cache::Cache)
     #
     
     # Sort the diagonal matrix elements
-    ix = sortperm(cache.hdiag)
+    # Note that these are constrained to be real for a symmetric or
+    # Hermitian matrix
+    hii = cache.work1
+    for i in 1:cache.matdim
+        hii[i] = real(cache.hdiag[i])
+    end
+    ix = sortperm(hii)
 
     # Construct the guess vectors
     fill!(cache.bvec, 0.0)
     for i in 1:cache.blocksize
         cache.bvec[ix[i],i] = 1.0
     end
-    
+
 end
 
 function run_gendav(cache::Cache, verbose::Bool)
@@ -102,10 +108,10 @@ function run_gendav(cache::Cache, verbose::Bool)
 
         # Compute the σ-vectors
         sigma_vectors(cache)
-        
+
         # Compute the new elements in the subspace matrix
         subspace_matrix(cache)
-
+        
         # Compute the eigenpairs of the subspace matrix
         subspace_diag(cache)
 
@@ -160,7 +166,7 @@ function sigma_vectors(cache::Cache)
 end
 
 function subspace_matrix(cache::DavidsonCache{T}
-                         ) where T <: AbstractFloat
+                         ) where T <: AllowedTypes
 
     # Dimensions
     @unpack currdim, nnew, zero, one = cache
@@ -175,14 +181,14 @@ function subspace_matrix(cache::DavidsonCache{T}
     i2 = currdim
     b = view(cache.bvec, :, 1:i2)
     σ = view(cache.sigvec, :, i1:i2)
-    BLAS.gemm!('T', 'N', one, b, σ, zero, bsigma)
-
+    BLAS.gemm!('C', 'N', one, b, σ, zero, bsigma)
+    
     # Fill in the Gmat array
     for i in 1:cache.currdim
         for j in 1:cache.nnew
             j1 = cache.currdim - cache.nnew + j
             cache.Gmat[i,j1] = bsigma[i,j]
-            cache.Gmat[j1,i] = cache.Gmat[i,j1]
+            cache.Gmat[j1,i] = conj(cache.Gmat[i,j1])
         end
     end
 
@@ -215,7 +221,33 @@ function subspace_diag(cache::DavidsonCache{T}) where T <: AllowedFloat
     
 end
 
+function subspace_diag(cache::DavidsonCache{T}) where T <: AllowedComplex
 
+    currdim = cache.currdim
+    
+    JOBZ = "V"
+    UPLO = "L"
+    N = currdim
+    A = reshape(view(cache.alpha, 1:currdim^2), (currdim, currdim))
+    LDA = currdim
+    W = view(cache.rho, 1:currdim)
+    LWORK = cache.lwork
+    WORK = view(cache.evwork, 1:LWORK)
+    RWORK = view(cache.revwork, 1:LWORK)
+    INFO = cache.info
+
+    # Fill in the subspace matrix
+    G = cache.Gmat
+    for j in 1:currdim
+        for i in 1:currdim
+            A[i,j] = G[i,j]
+        end
+    end
+
+    # Call to ?heev
+    heev!(JOBZ, UPLO, N, A, LDA, W, WORK, LWORK, RWORK, INFO)
+    
+end
 
 function residual_vectors(cache::Cache)
 
@@ -273,7 +305,7 @@ function residual_vectors(cache::Cache)
 
         # Residual norm
         w2 = view(work2, :, k:k)
-        rnorm[k] = sqrt(dot(w2, w2))
+        rnorm[k] = real(sqrt(dot(w2, w2)))
         
         # Update the convergence information
         if rnorm[k] < tol iconv[k] = 1 end
@@ -380,7 +412,7 @@ function subspace_vectors(cache::Cache)
     
     bprev = view(bvec, :, 1:currdim)
     bnew = view(bvec, :, ki:kf)
-    BLAS.gemm!('T', 'N', one, bprev, bnew, zero, Smat)
+    BLAS.gemm!('C', 'N', one, bprev, bnew, zero, Smat)
 
     # GS orthogonalisation of the correction vectors against the previous
     # subspace vectors
@@ -399,23 +431,23 @@ function subspace_vectors(cache::Cache)
             bk[j] /= len_bk
         end
     end
-    
+
     # Overlaps between the intermediately orthogonalised correction
     # vectors
     Smat = reshape(view(cache.work3, 1:nnew*nnew), (nnew, nnew))
-    BLAS.gemm!('T', 'N', one, bnew, bnew, zero, Smat)
+    BLAS.gemm!('C', 'N', one, bnew, bnew, zero, Smat)
 
     # Inverse square root of the overlap matrix
     # Note that invsqrt_matrix will overwrite the Smat matrix
     Sinvsq = reshape(view(cache.work4, 1:nnew*nnew), (nnew, nnew))
     invsqrt_matrix!(Sinvsq, Smat, cache)
-    
+
     # Symmetric orthogonalisation of the intermediately orthogonalised
     # correction vectors amongst themselves
     w2 = view(work2, :, 1:nnew)
     BLAS.gemm!('N', 'N', one, bnew, Sinvsq, zero, w2)
     copy!(bnew, w2)
-        
+
 end
 
 function invsqrt_matrix!(Ainvsq::AbstractMatrix{T},
@@ -452,7 +484,43 @@ function invsqrt_matrix!(Ainvsq::AbstractMatrix{T},
     end
     
 end
-    
+
+function invsqrt_matrix!(Ainvsq::AbstractMatrix{T},
+                         A::AbstractMatrix{T}, cache::Cache
+                         ) where T <: AllowedComplex
+
+    #
+    # N.B. this will overwrite the contents of the input matrix A
+    #
+
+    # Dimension of the input matrix
+    dim = size(A)[1]
+
+    # Eigenpairs of the input matrix
+    JOBZ = "V"
+    UPLO = "L"
+    N = dim
+    LDA = dim
+    W = view(cache.work1, 1:dim)
+    LWORK = cache.lwork
+    WORK = view(cache.evwork, 1:LWORK)
+    RWORK = view(cache.revwork, 1:LWORK)
+    INFO = cache.info
+    heev!(JOBZ, UPLO, N, A, LDA, W, WORK, LWORK, RWORK, INFO)
+
+    # Inverse square root of the input matrix
+    fill!(Ainvsq, 0.0)
+    for k in 1:dim
+        λinvsq = 1.0 / sqrt(abs(W[k]))
+        for j in 1:dim
+            for i in 1:dim
+                Ainvsq[j,i] += conj(A[i,k]) * A[j,k] * λinvsq
+            end
+        end
+    end
+
+end
+
 function subspace_collapse(cache::Cache)
 
     #
@@ -492,7 +560,7 @@ function subspace_collapse(cache::Cache)
 end
 
 function eigenvectors!(vectors::Matrix{T}, cache::Cache
-                       ) where T <: AllowedFloat
+                       ) where T <: AllowedTypes
     
     # Compute the Ritz vectors for the nroots lowest roots
     @unpack currdim, nroots, zero, one = cache

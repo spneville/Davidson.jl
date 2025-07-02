@@ -1,4 +1,4 @@
-mutable struct DavidsonCache{T} <: Cache
+mutable struct DavidsonCache{T, RT} <: Cache
     
     # Type parameter
     T::Type
@@ -36,14 +36,14 @@ mutable struct DavidsonCache{T} <: Cache
     # Subspace matrix and eigenpairs
     Gmat::Matrix{T}
     alpha::Vector{T}
-    rho::Vector{T}
-    rho1::Vector{T}
+    rho::Vector{RT}
+    rho1::Vector{RT}
     
     # Residual norms
     rnorm::Vector{Float64}
     
     # Work arrays
-    work1::Vector{T}
+    work1::Vector{RT}
     work2::Matrix{T}
     work3::Vector{T}
     work4::Vector{T}
@@ -58,6 +58,7 @@ mutable struct DavidsonCache{T} <: Cache
     # LAPACK ?syev and ?heev work arrays
     lwork::Int32
     evwork::Vector{T}
+    revwork::Vector{RT}
     info::Int32
 
     # -1.0, 0.0, and +1.0
@@ -76,11 +77,13 @@ mutable struct DavidsonCache{T} <: Cache
                               niter::Int64
                               ) where T <: AllowedTypes
 
-        if T <: AllowedComplex
-            println("We need to determine which arrays need to be Complex...")
-            exit()
+        # Real type
+        if T <: Union{Float32, ComplexF32}
+            RT = Float32
+        else
+            RT = Float64
         end
-            
+
         # Subspace vectors
         bvec = Matrix{T}(undef, matdim, maxvec)
         
@@ -90,14 +93,14 @@ mutable struct DavidsonCache{T} <: Cache
         # Subspace matrix and eigenpairs
         Gmat = Matrix{T}(undef, maxvec, maxvec)
         alpha = Vector{T}(undef, maxvec*maxvec)
-        rho = Vector{T}(undef, maxvec)
-        rho1 = Vector{T}(undef, maxvec)
+        rho = Vector{RT}(undef, maxvec)
+        rho1 = Vector{RT}(undef, maxvec)
         
         # Residual norms
         rnorm = Vector{Float64}(undef, blocksize)
         
         # Work arrays
-        work1 = Vector{T}(undef, matdim)
+        work1 = Vector{RT}(undef, blocksize)
         work2 = Matrix{T}(undef, matdim,blocksize)
         work3 = Vector{T}(undef, maxvec*blocksize)
         work4 = Vector{T}(undef, blocksize*blocksize)
@@ -110,19 +113,23 @@ mutable struct DavidsonCache{T} <: Cache
         iconv = Vector{Int64}(undef, blocksize)
 
         # LAPACK ?syev and ?heev work arrays
+        # We will use the same dimension for both the work and rwork
+        # arrays
         lwork::Int32 = 3 * maxvec
         evwork = Vector{T}(undef, lwork)
+        revwork = Vector{RT}(undef, lwork)
         info::Int32 = 0
-
+        
         # -1.0, 0.0, and +1.0
         minus_one::T = -1.0
         zero::T = 0.0
         one::T = 1.0
         
-        new{T}(T, f, hdiag, nroots, matdim, blocksize, maxvec, tol, niter,
-               bvec, sigvec, Gmat, alpha, rho, rho1, rnorm, work1, work2,
-               work3, work4, currdim, nconv, nnew, nsigma, iconv,
-               lwork, evwork, info, minus_one, zero, one)
+        new{T, RT}(T, f, hdiag, nroots, matdim, blocksize, maxvec, tol,
+                   niter, bvec, sigvec, Gmat, alpha, rho, rho1, rnorm,
+                   work1, work2, work3, work4, currdim, nconv, nnew,
+                   nsigma, iconv, lwork, evwork, revwork, info, minus_one,
+                   zero, one)
         
     end
 

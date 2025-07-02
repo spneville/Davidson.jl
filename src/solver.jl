@@ -6,8 +6,24 @@ function solver(f::Function,
                 blocksize=nroots+5,
                 maxvec=4*blocksize,
                 niter=100,
-                verbose=false
-                ) where T <: AllowedTypes
+                verbose=false) where T <: AllowedTypes
+
+    # Work array
+    Twork, Rwork = workarrays(T, matdim, blocksize, maxvec)
+    
+    
+end
+
+function solver(f::Function,
+                hdiag::Vector{T},
+                nroots::Int64,
+                matdim::Int64,
+                work::Vector{T};
+                tol=1e-4,
+                blocksize=nroots+5,
+                maxvec=4*blocksize,
+                niter=100,
+                verbose=false) where T <: AllowedTypes
 
     # Check on the input
     checkinp(nroots, blocksize, maxvec, matdim)

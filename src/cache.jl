@@ -1,4 +1,4 @@
-mutable struct DavidsonCache{T, RT} <: Cache
+mutable struct DavidsonCache{T, R} <: Cache
     
     # Type parameter
     T::Type
@@ -36,14 +36,14 @@ mutable struct DavidsonCache{T, RT} <: Cache
     # Subspace matrix and eigenpairs
     Gmat::Matrix{T}
     alpha::Vector{T}
-    rho::Vector{RT}
-    rho1::Vector{RT}
+    rho::Vector{R}
+    rho1::Vector{R}
     
     # Residual norms
     rnorm::Vector{Float64}
     
     # Work arrays
-    work1::Vector{RT}
+    work1::Vector{R}
     work2::Matrix{T}
     work3::Vector{T}
     work4::Vector{T}
@@ -58,7 +58,7 @@ mutable struct DavidsonCache{T, RT} <: Cache
     # LAPACK ?syev and ?heev work arrays
     lwork::Int32
     evwork::Vector{T}
-    revwork::Vector{RT}
+    revwork::Vector{R}
     info::Int32
 
     # -1.0, 0.0, and +1.0
@@ -79,9 +79,9 @@ mutable struct DavidsonCache{T, RT} <: Cache
 
         # Real type
         if T <: Union{Float32, ComplexF32}
-            RT = Float32
+            R = Float32
         else
-            RT = Float64
+            R = Float64
         end
 
         # Subspace vectors
@@ -93,14 +93,14 @@ mutable struct DavidsonCache{T, RT} <: Cache
         # Subspace matrix and eigenpairs
         Gmat = Matrix{T}(undef, maxvec, maxvec)
         alpha = Vector{T}(undef, maxvec*maxvec)
-        rho = Vector{RT}(undef, maxvec)
-        rho1 = Vector{RT}(undef, maxvec)
+        rho = Vector{R}(undef, maxvec)
+        rho1 = Vector{R}(undef, maxvec)
         
         # Residual norms
         rnorm = Vector{Float64}(undef, blocksize)
         
         # Work arrays
-        work1 = Vector{RT}(undef, matdim)
+        work1 = Vector{R}(undef, matdim)
         work2 = Matrix{T}(undef, matdim,blocksize)
         work3 = Vector{T}(undef, maxvec*blocksize)
         work4 = Vector{T}(undef, blocksize*blocksize)
@@ -117,7 +117,7 @@ mutable struct DavidsonCache{T, RT} <: Cache
         # arrays
         lwork::Int32 = 3 * maxvec
         evwork = Vector{T}(undef, lwork)
-        revwork = Vector{RT}(undef, lwork)
+        revwork = Vector{R}(undef, lwork)
         info::Int32 = 0
         
         # -1.0, 0.0, and +1.0
@@ -125,12 +125,86 @@ mutable struct DavidsonCache{T, RT} <: Cache
         zero::T = 0.0
         one::T = 1.0
         
-        new{T, RT}(T, f, hdiag, nroots, matdim, blocksize, maxvec, tol,
-                   niter, bvec, sigvec, Gmat, alpha, rho, rho1, rnorm,
-                   work1, work2, work3, work4, currdim, nconv, nnew,
-                   nsigma, iconv, lwork, evwork, revwork, info, minus_one,
-                   zero, one)
+        new{T, R}(T, f, hdiag, nroots, matdim, blocksize, maxvec, tol,
+                  niter, bvec, sigvec, Gmat, alpha, rho, rho1, rnorm,
+                  work1, work2, work3, work4, currdim, nconv, nnew,
+                  nsigma, iconv, lwork, evwork, revwork, info, minus_one,
+                  zero, one)
         
     end
 
+end
+
+function workarrays(T::DataType, matdim::Int64, blocksize::Int64,
+                    maxvec::Int64)
+
+    @assert T <: AllowedTypes
+    
+    if T <: Union{Float32, ComplexF32}
+        R = Float32
+    else
+        R = Float64
+    end
+    
+    Tdim = Tworksize(matdim, blocksize, maxvec)
+    Twork = Vector{T}(undef, Tdim)
+    
+    Rdim = Rworksize(matdim, blocksize, maxvec)
+    Rwork = Vector{R}(undef, Rdim)
+    
+    return Twork, Rwork
+    
+end
+
+function Tworksize(matdim::Int64, blocksize::Int64, maxvec::Int64)
+
+    dim = 0
+    
+    # Subspace vectors
+    dim += matdim * maxvec
+        
+    # Sigma vectors
+    dim += matdim * maxvec
+    
+    # Subspace matrix
+    dim += maxvec * maxvec
+
+    # Subspace eigenvectors
+    dim += maxvec * maxvec
+
+    # Residual norms
+    dim += blocksize
+    
+    # Work2 array
+    dim += matdim * blocksize
+
+    # Work3 array
+    dim += maxvec * blocksize
+
+    # Work4 array
+    dim += blocksize * blocksize
+    
+    # LAPACK ?syev and ?heev work arrays
+    dim += 3 * maxvec
+
+    return dim
+    
+end
+
+function Rworksize(matdim::Int64, blocksize::Int64, maxvec::Int64)
+
+    dim = 0
+    
+    # Subspace eigenvalues plus a working copy
+    dim += maxvec
+    dim += maxvec
+    
+    # Work1 array
+    dim += matdim
+
+    # LAPACK ?syev and ?heev work arrays
+    dim += 3 * maxvec
+
+    return dim
+    
 end

@@ -11,6 +11,7 @@ abstract type Cache end
 
 export solver
 export DavidsonCache
+export worksize
 
 include("cache.jl")
 include("wrapper.jl")

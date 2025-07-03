@@ -65,6 +65,27 @@ mutable struct DavidsonCache{T, R} <: Cache
     minus_one::T
     zero::T
     one::T
+
+    # Work arrays
+    Twork::Vector{T}
+    Rwork::Vector{R}
+
+    # TWork array offsets
+    bvec_start::Int64
+    sigvec_start::Int64
+    Gmat_start::Int64
+    alpha_start::Int64
+    rnorm_start::Int64
+    work2_start::Int64
+    work3_star::Int64
+    work4_start::Int64
+    evwork_start::Int64
+
+    # Rwork array offsets
+    rho_start::Int64
+    rho1_start::Int64
+    work1_start::Int64
+    revwork_start::Int64
     
     # Inner constructor
     function DavidsonCache{T}(f::Function,
@@ -74,12 +95,15 @@ mutable struct DavidsonCache{T, R} <: Cache
                               blocksize::Int64,
                               maxvec::Int64,
                               tol::Float64,
-                              niter::Int64
+                              niter::Int64,
+                              Twork::Vector{T},
+                              Rwork::Vector{<:AllowedFloat}
                               ) where T <: AllowedTypes
 
         # Real type
         R = T <: Allowed64 ? Float64 : Float32
-
+        @assert typeof(Rwork[1]) == R
+        
         # Subspace vectors
         bvec = Vector{T}(undef, matdim*maxvec)
         
@@ -120,12 +144,24 @@ mutable struct DavidsonCache{T, R} <: Cache
         minus_one::T = -1.0
         zero::T = 0.0
         one::T = 1.0
+
+        # Twork array offsets
+        bvec_start, sigvec_start, Gmat_start, alpha_start,
+        rnorm_start, work2_start, work3_start, work4_start,
+        evwork_start = Twork_offsets(matdim, blocksize, maxvec)
+        
+        # Rwork array offsets
+        rho_start, rho1_start, work1_start, revwork_start =
+            Rwork_offsets(matdim, maxvec)
         
         new{T, R}(T, f, hdiag, nroots, matdim, blocksize, maxvec, tol,
                   niter, bvec, sigvec, Gmat, alpha, rho, rho1, rnorm,
                   work1, work2, work3, work4, currdim, nconv, nnew,
                   nsigma, iconv, lwork, evwork, revwork, info, minus_one,
-                  zero, one)
+                  zero, one, Twork, Rwork, bvec_start, sigvec_start,
+                  Gmat_start, alpha_start, rnorm_start, work2_start,
+                  work3_start, work4_start, evwork_start, rho_start,
+                  rho1_start, work1_start, revwork_start)
         
     end
 
@@ -202,5 +238,137 @@ function Rworksize(matdim::Int64, blocksize::Int64, maxvec::Int64)
     dim += 3 * maxvec
 
     return dim
+    
+end
+
+function Twork_offsets(matdim::Int64, blocksize::Int64, maxvec::Int64)
+
+    lwork = 3 * maxvec
+    
+    bvec_start = 1
+    bvec_end = bvec_start + matdim*maxvec - 1
+    
+    sigvec_start = bvec_end + 1
+    sigvec_end = sigvec_start + matdim*maxvec - 1
+    
+    Gmat_start = sigvec_end + 1
+    Gmat_end = Gmat_start + maxvec*maxvec - 1
+    
+    alpha_start = Gmat_end + 1
+    alpha_end = alpha_start + maxvec*maxvec - 1
+    
+    rnorm_start = alpha_end + 1
+    rnorm_end = rnorm_start + blocksize - 1
+    
+    work2_start = rnorm_end + 1
+    work2_end = work2_start + matdim*blocksize - 1
+    
+    work3_start = work2_end + 1
+    work3_end = work3_start + maxvec*blocksize - 1
+    
+    work4_start = work3_end + 1
+    work4_end = work4_start + blocksize*blocksize - 1
+    
+    evwork_start = work4_end + 1
+    evwork_end = evwork_start + lwork - 1
+
+    return bvec_start, sigvec_start, Gmat_start, alpha_start,
+    rnorm_start, work2_start, work3_start, work4_start, evwork_start
+    
+end
+
+function Rwork_offsets(matdim::Int64, maxvec::Int64)
+
+    lwork = 3 * maxvec
+
+    rho_start = 1
+    rho_end = rho_start + maxvec - 1
+
+    rho1_start = rho_end + 1
+    rho1_end = rho1_start + maxvec - 1
+    
+    work1_start = rho1_end + 1
+    work1_end = work1_start + matdim - 1
+    
+    revwork_start = work1_end + 1
+    revwork_end = revwork_start + lwork - 1
+
+    return rho_start, rho1_start, work1_start, revwork_start
+    
+end
+
+function bvec(cache::DavidsonCache, range1::UnitRange{Int64},
+              range2::UnitRange{Int64})
+
+    @assert range1 == 1:cache.matdim
+    
+    dim1 = range1.stop - range1.start + 1
+    dim2 = range2.stop - range2.start + 1
+
+    len = length(range1) * length(range2)
+
+    istart = cache.bvec_start + (range2.start - 1) * dim1
+    iend = istart + len - 1
+    
+    b = reshape(view(cache.Twork, istart:iend),
+                (dim1, dim2))
+    
+    return b
+    
+end
+
+function sigvec(cache::DavidsonCache, range1::UnitRange{Int64},
+                range2::UnitRange{Int64})
+
+    @assert range1 == 1:cache.matdim
+
+    dim1 = range1.stop - range1.start + 1
+    dim2 = range2.stop - range2.start + 1
+
+    len = length(range1) * length(range2)
+
+    istart = cache.sigvec_start + (range2.start - 1) * dim1
+    iend = istart + len - 1
+    
+    σ = reshape(view(cache.Twork, istart:iend),
+                (dim1, dim2))
+    
+    return σ
+    
+end
+
+function Gmat(cache::DavidsonCache, range1::UnitRange{Int64},
+              range2::UnitRange{Int64})
+
+    dim1 = range1.stop - range1.start + 1
+    dim2 = range2.stop - range2.start + 1
+
+    len = length(range1) * length(range2)
+
+    istart = cache.Gmat_start + (range2.start - 1) * dim1
+    iend = istart + len - 1
+    
+    G = reshape(view(cache.Twork, istart:iend),
+                (dim1, dim2))
+
+    return G
+    
+end
+
+function alpha(cache::DavidsonCache, range1::UnitRange{Int64},
+              range2::UnitRange{Int64})
+
+    dim1 = range1.stop - range1.start + 1
+    dim2 = range2.stop - range2.start + 1
+
+    len = length(range1) * length(range2)
+
+    istart = cache.alpha_start + (range2.start - 1) * dim1
+    iend = istart + len - 1
+    
+    α = reshape(view(cache.Twork, istart:iend),
+                (dim1, dim2))
+
+    return α
     
 end

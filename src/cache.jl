@@ -35,8 +35,8 @@ mutable struct DavidsonCache{T, R} <: Cache
     iconv::Vector{Int64}
 
     # LAPACK ?syev and ?heev work arrays
-    lwork::Int32
-    info::Int32
+    lwork::Int64
+    info::Int64
 
     # -1.0, 0.0, and +1.0
     minus_one::T
@@ -91,8 +91,8 @@ mutable struct DavidsonCache{T, R} <: Cache
         # LAPACK ?syev and ?heev work arrays
         # We will use the same dimension for both the work and rwork
         # arrays
-        lwork::Int32 = 3 * maxvec
-        info::Int32 = 0
+        lwork = 3 * maxvec
+        info = 0
         
         # -1.0, 0.0, and +1.0
         minus_one::T = -1.0

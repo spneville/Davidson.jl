@@ -313,27 +313,27 @@ function subspace_diag(cache::DavidsonCache{T}) where T <: AllowedFloat
 
     currdim = cache.currdim
     
-    JOBZ = "V"
-    UPLO = "L"
-    N = currdim
-    A = alpha(cache, 1:currdim, 1:currdim)
-    LDA = currdim
-    W = rho(cache, 1:currdim)
-    LWORK = cache.lwork
-    WORK = evwork(cache, 1:LWORK)
-    INFO = cache.info
+    jobz = "V"
+    uplo = "L"
+    n = currdim
+    a = alpha(cache, 1:currdim, 1:currdim)
+    lda = currdim
+    w = rho(cache, 1:currdim)
+    lwork = cache.lwork
+    work = evwork(cache, 1:lwork)
+    info = cache.info
 
     # Fill in the subspace matrix
     G = Gmat(cache, 1:currdim, 1:currdim)
     
     for j in 1:currdim
         for i in 1:currdim
-            A[i,j] = G[i,j]
+            a[i,j] = G[i,j]
         end
     end
 
     # Call to ?syev
-    syev!(JOBZ, UPLO, N, A, LDA, W, WORK, LWORK, INFO)
+    syev!(jobz, uplo, n, a, lda, w, work, lwork, info)
     
 end
 
@@ -341,27 +341,27 @@ function subspace_diag(cache::DavidsonCache{T}) where T <: AllowedComplex
 
     currdim = cache.currdim
     
-    JOBZ = "V"
-    UPLO = "L"
-    N = currdim
-    A = alpha(cache, 1:currdim, 1:currdim)    
-    LDA = currdim
-    W = rho(cache, 1:currdim)
-    LWORK = cache.lwork
-    WORK = evwork(cache, 1:LWORK)
-    RWORK = revwork(cache, 1:LWORK)
-    INFO = cache.info
+    jobz = "V"
+    uplo = "L"
+    n = currdim
+    a = alpha(cache, 1:currdim, 1:currdim)    
+    lda = currdim
+    w = rho(cache, 1:currdim)
+    lwork = cache.lwork
+    work = evwork(cache, 1:lwork)
+    rwork = revwork(cache, 1:lwork)
+    info = cache.info
 
     # Fill in the subspace matrix
     G = Gmat(cache, 1:currdim, 1:currdim)
     for j in 1:currdim
         for i in 1:currdim
-            A[i,j] = G[i,j]
+            a[i,j] = G[i,j]
         end
     end
 
     # Call to ?heev
-    heev!(JOBZ, UPLO, N, A, LDA, W, WORK, LWORK, RWORK, INFO)
+    heev!(jobz, uplo, n, a, lda, w, work, lwork, rwork, info)
     
 end
 
@@ -587,20 +587,20 @@ function invsqrt_matrix!(Ainvsq::AbstractMatrix{T},
     dim = size(A)[1]
 
     # Eigenpairs of the input matrix
-    JOBZ = "V"
-    UPLO = "L"
-    N = dim
-    LDA = dim
-    W = work1(cache, 1:dim)
-    LWORK = cache.lwork
-    WORK = evwork(cache, 1:LWORK)
-    INFO = cache.info
-    syev!(JOBZ, UPLO, N, A, LDA, W, WORK, LWORK, INFO)
+    jobz = "V"
+    uplo = "L"
+    n = dim
+    lda = dim
+    w = work1(cache, 1:dim)
+    lwork = cache.lwork
+    work = evwork(cache, 1:lwork)
+    info = cache.info
+    syev!(jobz, uplo, n, A, lda, w, work, lwork, info)
 
     # Inverse square root of the input matrix
     fill!(Ainvsq, 0.0)
     for k in 1:dim
-        λinvsq = 1.0 / sqrt(abs(W[k]))
+        λinvsq = 1.0 / sqrt(abs(w[k]))
         for j in 1:dim
             for i in 1:dim
                 Ainvsq[j,i] += A[i,k] * A[j,k] * λinvsq
@@ -622,21 +622,21 @@ function invsqrt_matrix!(Ainvsq::AbstractMatrix{T},
     dim = size(A)[1]
 
     # Eigenpairs of the input matrix
-    JOBZ = "V"
-    UPLO = "L"
-    N = dim
-    LDA = dim
-    W = work1(cache, 1:dim)
-    LWORK = cache.lwork
-    WORK = evwork(cache, 1:LWORK)
-    RWORK = revwork(cache, 1:LWORK)
-    INFO = cache.info
-    heev!(JOBZ, UPLO, N, A, LDA, W, WORK, LWORK, RWORK, INFO)
+    jobz = "V"
+    uplo = "L"
+    n = dim
+    lda = dim
+    w = work1(cache, 1:dim)
+    lwork = cache.lwork
+    work = evwork(cache, 1:lwork)
+    rwork = revwork(cache, 1:lwork)
+    info = cache.info
+    heev!(jobz, uplo, n, A, lda, w, work, lwork, rwork, info)
 
     # Inverse square root of the input matrix
     fill!(Ainvsq, 0.0)
     for k in 1:dim
-        λinvsq = 1.0 / sqrt(abs(W[k]))
+        λinvsq = 1.0 / sqrt(abs(w[k]))
         for j in 1:dim
             for i in 1:dim
                 Ainvsq[j,i] += conj(A[i,k]) * A[j,k] * λinvsq

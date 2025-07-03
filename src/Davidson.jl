@@ -11,9 +11,9 @@ AllowedTypes = Union{AllowedFloat, AllowedComplex}
 
 abstract type Cache end
 
-export solver
+export solver, solver!
 export DavidsonCache
-export worksize
+export workarrays
 
 include("cache.jl")
 include("wrapper.jl")

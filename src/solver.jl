@@ -7,18 +7,83 @@ function solver(f::Function,
                 maxvec=4*blocksize,
                 niter=100,
                 verbose=false) where T <: AllowedTypes
-    
-    # Check on the input
-    checkinp(nroots, blocksize, maxvec, matdim)
 
-    # Work arrays
     Twork, Rwork = workarrays(T, matdim, blocksize, maxvec)
     
+    vectors, values = solver(f, hdiag, nroots, matdim, Twork, Rwork;
+                             tol=tol, blocksize=blocksize,
+                             maxvec=maxvec, niter=niter,
+                             verbose=verbose)
+    
+    return vectors, values
+    
+end
+
+function solver(f::Function,
+                hdiag::Vector{T},
+                nroots::Int64,
+                matdim::Int64,
+                Twork::Vector{T},
+                Rwork::Vector{<:AllowedFloat};
+                tol=1e-4,
+                blocksize=nroots+5,
+                maxvec=4*blocksize,
+                niter=100,
+                verbose=false) where T <: AllowedTypes
+
+    vectors = Matrix{T}(undef, matdim, nroots)
+
+    values = Vector{eltype(Rwork)}(undef, nroots)
+
+    solver!(vectors, values, f, hdiag, nroots, matdim, Twork, Rwork;
+            tol=tol, blocksize=blocksize, maxvec=maxvec, niter=niter,
+            verbose=verbose)
+
+    return vectors, values
+    
+end
+
+function solver!(vectors::Matrix{T},
+                 values::Vector{<:AllowedFloat},
+                 f::Function,
+                 hdiag::Vector{T},
+                 nroots::Int64,
+                 matdim::Int64;
+                 tol=1e-4,
+                 blocksize=nroots+5,
+                 maxvec=4*blocksize,
+                 niter=100,
+                 verbose=false) where T <: AllowedTypes
+    
+    Twork, Rwork = workarrays(T, matdim, blocksize, maxvec)
+    
+    solver!(vectors, values, f, hdiag, nroots, matdim, Twork,
+            Rwork; tol=tol, blocksize=blocksize, maxvec=maxvec,
+            niter=niter, verbose=verbose)
+
+end
+
+function solver!(vectors::Matrix{T},
+                 values::Vector{<:AllowedFloat},
+                 f::Function,
+                 hdiag::Vector{T},
+                 nroots::Int64,
+                 matdim::Int64,
+                 Twork::Vector{T},
+                 Rwork::Vector{<:AllowedFloat};
+                 tol=1e-4,
+                 blocksize=nroots+5,
+                 maxvec=4*blocksize,
+                 niter=100,
+                 verbose=false) where T <: AllowedTypes
+
+    # Check on the input
+    checkinp(nroots, blocksize, maxvec, matdim, Twork, Rwork)
+    
     # Davidson cache
-    R = typeof(Rwork)
     cache = DavidsonCache{T}(f, hdiag, nroots, matdim, blocksize,
                              maxvec, tol, niter, Twork, Rwork)
-
+    
     # Construct the guess vectors
     guessvec(cache)
 
@@ -27,18 +92,16 @@ function solver(f::Function,
 
     # Eigenvalues
     ρ = rho(cache, 1:nroots)
-    values = copy(ρ)
+    copy!(values, ρ)
     
     # Get the eigenvectors
-    vectors = Matrix{T}(undef, matdim, nroots)
     eigenvectors!(vectors, cache)
-    
-    return vectors, values
-    
+
 end
 
 function checkinp(nroots::Int64, blocksize::Int64, maxvec::Int64,
-                  matdim::Int64)
+                  matdim::Int64, Twork::Vector{<:AllowedTypes},
+                  Rwork::Vector{<:AllowedFloat})
 
     # The block size must be greater than or equal to the number
     # of roots
@@ -65,7 +128,16 @@ function checkinp(nroots::Int64, blocksize::Int64, maxvec::Int64,
         @error "The maximum subspace dimension cannot be greater" *
             " than the matrix dimension"
     end
-        
+
+    # Work array dimensions
+    if size(Rwork)[1] < Rworksize(matdim, blocksize, maxvec)
+        @error "Rwork is not large enough"
+    end
+
+    if size(Twork)[1] < Tworksize(matdim, blocksize, maxvec)
+        @error "Twork is not large enough"
+    end
+    
 end
 
 function guessvec(cache::Cache)

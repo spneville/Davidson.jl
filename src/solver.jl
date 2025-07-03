@@ -26,7 +26,8 @@ function solver(f::Function,
     run_gendav(cache, verbose)
 
     # Eigenvalues
-    values = cache.rho[1:nroots]
+    ρ = rho(cache, 1:nroots)
+    values = copy(ρ)
     
     # Get the eigenvectors
     vectors = Matrix{T}(undef, matdim, nroots)
@@ -80,7 +81,7 @@ function guessvec(cache::Cache)
     # Sort the diagonal matrix elements
     # Note that these are constrained to be real for a symmetric or
     # Hermitian matrix
-    hii = cache.work1
+    hii = work1(cache, 1:matdim)
     for i in 1:matdim
         hii[i] = real(cache.hdiag[i])
     end
@@ -187,9 +188,8 @@ function subspace_matrix(cache::DavidsonCache{T}
     @unpack matdim, currdim, nnew, zero, one = cache
 
     # Work array
-    bsigma = reshape(view(cache.work3, 1:currdim*nnew),
-                     (currdim, nnew))
-    fill!(bsigma, 0.0)
+    bσ = work3(cache, 1:currdim, 1:nnew)
+    fill!(bσ, 0.0)
 
     # b^T sigma matrix product
     i1 = currdim - nnew + 1
@@ -201,7 +201,7 @@ function subspace_matrix(cache::DavidsonCache{T}
 
     σ = sigvec(cache, 1:matdim, i1:i2)
             
-    BLAS.gemm!('C', 'N', one, b, σ, zero, bsigma)
+    BLAS.gemm!('C', 'N', one, b, σ, zero, bσ)
     
     # Re-order the Gmat working vector to be consistent
     # with the new subspace dimension
@@ -230,7 +230,7 @@ function subspace_matrix(cache::DavidsonCache{T}
     for i in 1:currdim
         for j in 1:nnew
             j1 = currdim - nnew + j
-            G[i,j1] = bsigma[i,j]
+            G[i,j1] = bσ[i,j]
             G[j1,i] = conj(G[i,j1])
         end
     end
@@ -246,9 +246,9 @@ function subspace_diag(cache::DavidsonCache{T}) where T <: AllowedFloat
     N = currdim
     A = alpha(cache, 1:currdim, 1:currdim)
     LDA = currdim
-    W = view(cache.rho, 1:currdim)
+    W = rho(cache, 1:currdim)
     LWORK = cache.lwork
-    WORK = view(cache.evwork, 1:LWORK)
+    WORK = evwork(cache, 1:LWORK)
     INFO = cache.info
 
     # Fill in the subspace matrix
@@ -274,10 +274,10 @@ function subspace_diag(cache::DavidsonCache{T}) where T <: AllowedComplex
     N = currdim
     A = alpha(cache, 1:currdim, 1:currdim)    
     LDA = currdim
-    W = view(cache.rho, 1:currdim)
+    W = rho(cache, 1:currdim)
     LWORK = cache.lwork
-    WORK = view(cache.evwork, 1:LWORK)
-    RWORK = view(cache.revwork, 1:LWORK)
+    WORK = evwork(cache, 1:LWORK)
+    RWORK = revwork(cache, 1:LWORK)
     INFO = cache.info
 
     # Fill in the subspace matrix
@@ -295,40 +295,41 @@ end
 
 function residual_vectors(cache::Cache)
 
-    @unpack matdim, currdim, blocksize, nnew, tol, minus_one, zero, one = cache
+    @unpack matdim, maxvec, currdim, blocksize, nnew, tol,
+    minus_one, zero, one = cache
 
     # Subspace eigenvectors    
     α = alpha(cache, 1:currdim, 1:currdim)
     
     # Subspace eigenvalues
-    rho = view(cache.rho, 1:currdim)
+    #rho = view(cache.rho, 1:currdim)
+
+    ρ = rho(cache, 1:currdim)
     
     # Working arrays
-    alpha_bar = reshape(view(cache.work3, 1:currdim*blocksize),
-                        (currdim, blocksize))
+    α_bar = work3(cache, 1:currdim, 1:blocksize)    
     
     #
     # Compute the residual vectors
-    # r_k = Sum_i alpha_ik * (sigma_i - rho_k b_i),
+    # r_k = Sum_i α_ik * (σ_i - ρ_k b_i),
     #
-    # (alpha_bar)_ik = alpha_ik * rho_K
+    # (α_bar)_ik = α_ik * rho_K
     for k in 1:blocksize
         for i in 1:currdim
-            alpha_bar[i,k] = α[i,k] * rho[k]
+            α_bar[i,k] = α[i,k] * ρ[k]
         end
     end
     
-    # sigma alpha
+    # σ α
     σ = sigvec(cache, 1:matdim, 1:currdim)
     α = alpha(cache, 1:currdim, 1:blocksize)
+    σα = work2(cache, 1:matdim, 1:blocksize)
     
-    work2 = reshape(view(cache.work2, 1:matdim*blocksize),
-                    (matdim, blocksize))
-    BLAS.gemm!('N', 'N', one, σ, α, zero, work2)
+    BLAS.gemm!('N', 'N', one, σ, α, zero, σα)
     
-    # sigma alpha - b alpha_bar
+    # σ α - b α_bar
     b = bvec(cache, 1:matdim, 1:currdim)
-    BLAS.gemm!('N', 'N', minus_one, b, alpha_bar, one, work2)
+    BLAS.gemm!('N', 'N', minus_one, b, α_bar, one, σα)
         
     #
     # Save the residual vectors for the unconverged roots
@@ -336,9 +337,9 @@ function residual_vectors(cache::Cache)
     # Initialisation
     ki=currdim + 1
     kf=currdim + nnew
-    rnorm = cache.rnorm
+    resnorm = rnorm(cache, 1:blocksize)
     iconv = cache.iconv
-    rho1 = cache.rho1
+    ρ1 = rho1(cache, 1:maxvec)
     
     # Loop over roots
     nnew = 0
@@ -347,11 +348,11 @@ function residual_vectors(cache::Cache)
     for k in 1:blocksize
 
         # Residual norm
-        w2 = view(cache.work2, (k-1)*matdim+1:k*matdim)
-        rnorm[k] = real(sqrt(dot(w2, w2)))
+        r = reshape(work2(cache, 1:matdim, k:k), (matdim))
+        resnorm[k] = real(sqrt(dot(r, r)))
         
         # Update the convergence information
-        if rnorm[k] < tol iconv[k] = 1 end
+        if resnorm[k] < tol iconv[k] = 1 end
     
         # Save the residual vector and corresponding eigenvalue if it
         # corresponds to an unconverged root
@@ -363,11 +364,11 @@ function residual_vectors(cache::Cache)
             
             b = reshape(bvec(cache, 1:matdim, k1:k1), (matdim))
             
-            w2 = view(cache.work2, (k-1)*matdim+1:k*matdim)
+            r = reshape(work2(cache, 1:matdim, k:k), (matdim))
             
-            b = copy!(b, w2) 
+            b = copy!(b, r) 
             
-            rho1[nnew] = rho[k]
+            ρ1[nnew] = ρ[k]
 
         end
 
@@ -385,12 +386,10 @@ function print_report(k::Int64, cache::Cache)
     end
 
     # Information for the current iteration
+    @unpack blocksize, currdim, iconv, nroots = cache
 
-    #if (verbose) write(6,'(x,i4,7x,i4,3x,E13.7,3x,i4)') &
-    #     k,currdim,maxval(rnorm(1:nstates)),sum(iconv(1:nstates))
-
-    @unpack currdim, rnorm, iconv, nroots = cache
-    maxres = maximum(rnorm[1:nroots])
+    resnorm = rnorm(cache, 1:blocksize)
+    maxres = maximum(resnorm[1:nroots])
     nconv = sum(iconv)
 
     println("$k $currdim $maxres $nconv")
@@ -399,8 +398,10 @@ end
 
 function correction_vectors(cache::Cache)
 
-    @unpack matdim, maxvec, currdim, nnew, hdiag, rho1 = cache
+    @unpack matdim, maxvec, currdim, nnew, hdiag = cache
 
+    ρ1 = rho1(cache, 1:maxvec)
+    
     b = bvec(cache, 1:matdim, 1:maxvec)
     
     #
@@ -420,7 +421,7 @@ function correction_vectors(cache::Cache)
         
         # Loop over elements of the correction vector
         for i in 1:matdim
-            b[i,k] = -b[i,k] / (hdiag[i]-rho1[k1])
+            b[i,k] = -b[i,k] / (hdiag[i]-ρ1[k1])
         end
             
     end
@@ -433,8 +434,6 @@ function subspace_vectors(cache::Cache)
 
     b = bvec(cache, 1:matdim, 1:maxvec)
 
-    work2 = cache.work2
-    
     # Indices of the positions in the bvec array in which the new
     # subspace vectors will be stored
     ki = currdim + 1
@@ -454,7 +453,7 @@ function subspace_vectors(cache::Cache)
 
     # Overlaps between the previous subspace vectors and the correction
     # vectors
-    Smat = reshape(view(cache.work3, 1:currdim*nnew), (currdim, nnew))
+    Smat = work3(cache, 1:currdim, 1:nnew)
     
     bprev = bvec(cache, 1:matdim, 1:currdim)
     
@@ -487,20 +486,20 @@ function subspace_vectors(cache::Cache)
 
     # Overlaps between the intermediately orthogonalised correction
     # vectors
-    Smat = reshape(view(cache.work3, 1:nnew*nnew), (nnew, nnew))
+    Smat = work3(cache, 1:nnew, 1:nnew)
+
     BLAS.gemm!('C', 'N', one, bnew, bnew, zero, Smat)
 
     # Inverse square root of the overlap matrix
     # Note that invsqrt_matrix will overwrite the Smat matrix
-    Sinvsq = reshape(view(cache.work4, 1:nnew*nnew), (nnew, nnew))
+    Sinvsq = work4(cache, 1:nnew, 1:nnew)
     invsqrt_matrix!(Sinvsq, Smat, cache)
 
     # Symmetric orthogonalisation of the intermediately orthogonalised
     # correction vectors amongst themselves
-    w2 = reshape(view(work2, 1:matdim*nnew), (matdim, nnew))
-    
-    BLAS.gemm!('N', 'N', one, bnew, Sinvsq, zero, w2)
-    copy!(bnew, w2)
+    ortho_bnew = work2(cache, 1:matdim, 1:nnew)
+    BLAS.gemm!('N', 'N', one, bnew, Sinvsq, zero, ortho_bnew)
+    copy!(bnew, ortho_bnew)
 
 end
 
@@ -520,9 +519,9 @@ function invsqrt_matrix!(Ainvsq::AbstractMatrix{T},
     UPLO = "L"
     N = dim
     LDA = dim
-    W = view(cache.work1, 1:dim)
+    W = work1(cache, 1:dim)
     LWORK = cache.lwork
-    WORK = view(cache.evwork, 1:LWORK)
+    WORK = evwork(cache, 1:LWORK)
     INFO = cache.info
     syev!(JOBZ, UPLO, N, A, LDA, W, WORK, LWORK, INFO)
 
@@ -555,10 +554,10 @@ function invsqrt_matrix!(Ainvsq::AbstractMatrix{T},
     UPLO = "L"
     N = dim
     LDA = dim
-    W = view(cache.work1, 1:dim)
+    W = work1(cache, 1:dim)
     LWORK = cache.lwork
-    WORK = view(cache.evwork, 1:LWORK)
-    RWORK = view(cache.revwork, 1:LWORK)
+    WORK = evwork(cache, 1:LWORK)
+    RWORK = revwork(cache, 1:LWORK)
     INFO = cache.info
     heev!(JOBZ, UPLO, N, A, LDA, W, WORK, LWORK, RWORK, INFO)
 

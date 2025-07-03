@@ -27,27 +27,6 @@ mutable struct DavidsonCache{T, R} <: Cache
     # Maximum number of iterations
     niter::Int64
 
-    # Subspace vectors
-    bvec::Vector{T}
-    
-    # Sigma vectors
-    sigvec::Vector{T}
-
-    # Subspace matrix and eigenpairs
-    Gmat::Vector{T}
-    alpha::Vector{T}
-    rho::Vector{R}
-    rho1::Vector{R}
-    
-    # Residual norms
-    rnorm::Vector{Float64}
-    
-    # Work arrays
-    work1::Vector{R}
-    work2::Vector{T}
-    work3::Vector{T}
-    work4::Vector{T}
-
     # Counters, etc.
     currdim::Int64
     nconv::Int64
@@ -57,8 +36,6 @@ mutable struct DavidsonCache{T, R} <: Cache
 
     # LAPACK ?syev and ?heev work arrays
     lwork::Int32
-    evwork::Vector{T}
-    revwork::Vector{R}
     info::Int32
 
     # -1.0, 0.0, and +1.0
@@ -77,7 +54,7 @@ mutable struct DavidsonCache{T, R} <: Cache
     alpha_start::Int64
     rnorm_start::Int64
     work2_start::Int64
-    work3_star::Int64
+    work3_start::Int64
     work4_start::Int64
     evwork_start::Int64
 
@@ -104,27 +81,6 @@ mutable struct DavidsonCache{T, R} <: Cache
         R = T <: Allowed64 ? Float64 : Float32
         @assert typeof(Rwork[1]) == R
         
-        # Subspace vectors
-        bvec = Vector{T}(undef, matdim*maxvec)
-        
-        # Sigma vectors
-        sigvec = Vector{T}(undef, matdim*maxvec)
-
-        # Subspace matrix and eigenpairs
-        Gmat = Vector{T}(undef, maxvec*maxvec)
-        alpha = Vector{T}(undef, maxvec*maxvec)
-        rho = Vector{R}(undef, maxvec)
-        rho1 = Vector{R}(undef, maxvec)
-        
-        # Residual norms
-        rnorm = Vector{Float64}(undef, blocksize)
-        
-        # Work arrays
-        work1 = Vector{R}(undef, matdim)
-        work2 = Vector{T}(undef, matdim*blocksize)
-        work3 = Vector{T}(undef, maxvec*blocksize)
-        work4 = Vector{T}(undef, blocksize*blocksize)
-        
         # Counters, etc.
         currdim = 0
         nconv = 0
@@ -136,8 +92,6 @@ mutable struct DavidsonCache{T, R} <: Cache
         # We will use the same dimension for both the work and rwork
         # arrays
         lwork::Int32 = 3 * maxvec
-        evwork = Vector{T}(undef, lwork)
-        revwork = Vector{R}(undef, lwork)
         info::Int32 = 0
         
         # -1.0, 0.0, and +1.0
@@ -147,17 +101,16 @@ mutable struct DavidsonCache{T, R} <: Cache
 
         # Twork array offsets
         bvec_start, sigvec_start, Gmat_start, alpha_start,
-        rnorm_start, work2_start, work3_start, work4_start,
+        work2_start, work3_start, work4_start,
         evwork_start = Twork_offsets(matdim, blocksize, maxvec)
         
         # Rwork array offsets
-        rho_start, rho1_start, work1_start, revwork_start =
-            Rwork_offsets(matdim, maxvec)
+        rho_start, rho1_start, rnorm_start, work1_start,
+        revwork_start = Rwork_offsets(matdim, blocksize, maxvec)
         
         new{T, R}(T, f, hdiag, nroots, matdim, blocksize, maxvec, tol,
-                  niter, bvec, sigvec, Gmat, alpha, rho, rho1, rnorm,
-                  work1, work2, work3, work4, currdim, nconv, nnew,
-                  nsigma, iconv, lwork, evwork, revwork, info, minus_one,
+                  niter, currdim, nconv, nnew,
+                  nsigma, iconv, lwork, info, minus_one,
                   zero, one, Twork, Rwork, bvec_start, sigvec_start,
                   Gmat_start, alpha_start, rnorm_start, work2_start,
                   work3_start, work4_start, evwork_start, rho_start,
@@ -230,6 +183,9 @@ function Rworksize(matdim::Int64, blocksize::Int64, maxvec::Int64)
     # Subspace eigenvalues plus a working copy
     dim += maxvec
     dim += maxvec
+
+    # Residual norms
+    dim += blocksize
     
     # Work1 array
     dim += matdim
@@ -257,10 +213,7 @@ function Twork_offsets(matdim::Int64, blocksize::Int64, maxvec::Int64)
     alpha_start = Gmat_end + 1
     alpha_end = alpha_start + maxvec*maxvec - 1
     
-    rnorm_start = alpha_end + 1
-    rnorm_end = rnorm_start + blocksize - 1
-    
-    work2_start = rnorm_end + 1
+    work2_start = alpha_end + 1
     work2_end = work2_start + matdim*blocksize - 1
     
     work3_start = work2_end + 1
@@ -273,11 +226,11 @@ function Twork_offsets(matdim::Int64, blocksize::Int64, maxvec::Int64)
     evwork_end = evwork_start + lwork - 1
 
     return bvec_start, sigvec_start, Gmat_start, alpha_start,
-    rnorm_start, work2_start, work3_start, work4_start, evwork_start
+    work2_start, work3_start, work4_start, evwork_start
     
 end
 
-function Rwork_offsets(matdim::Int64, maxvec::Int64)
+function Rwork_offsets(matdim::Int64, blocksize::Int64, maxvec::Int64)
 
     lwork = 3 * maxvec
 
@@ -286,14 +239,18 @@ function Rwork_offsets(matdim::Int64, maxvec::Int64)
 
     rho1_start = rho_end + 1
     rho1_end = rho1_start + maxvec - 1
+
+    rnorm_start =rho1_end + 1
+    rnorm_end = rnorm_start + blocksize - 1
     
-    work1_start = rho1_end + 1
+    work1_start = rnorm_end + 1
     work1_end = work1_start + matdim - 1
     
     revwork_start = work1_end + 1
     revwork_end = revwork_start + lwork - 1
 
-    return rho_start, rho1_start, work1_start, revwork_start
+    return rho_start, rho1_start, rnorm_start, work1_start,
+    revwork_start
     
 end
 
@@ -370,5 +327,137 @@ function alpha(cache::DavidsonCache, range1::UnitRange{Int64},
                 (dim1, dim2))
 
     return α
+    
+end
+
+function rho(cache::DavidsonCache, range::UnitRange{Int64})
+
+    len = length(range)
+
+    istart = cache.rho_start + range.start - 1
+    iend = istart + len - 1
+    
+    ρ = view(cache.Rwork, istart:iend)
+
+    return ρ
+    
+end
+
+function rho1(cache::DavidsonCache, range::UnitRange{Int64})
+
+    len = length(range)
+
+    istart = cache.rho1_start + range.start - 1
+    iend = istart + len - 1
+    
+    ρ1 = view(cache.Rwork, istart:iend)
+
+    return ρ1
+    
+end
+
+function rnorm(cache::DavidsonCache, range::UnitRange{Int64})
+
+    len = length(range)
+
+    istart = cache.rnorm_start + range.start - 1
+    iend = istart + len - 1
+    
+    resnorm = view(cache.Rwork, istart:iend)
+
+    return resnorm
+    
+end
+
+function work1(cache::DavidsonCache, range::UnitRange{Int64})
+
+    len = length(range)
+
+    istart = cache.work1_start + range.start - 1
+    iend = istart + len - 1
+    
+    w1 = view(cache.Rwork, istart:iend)
+
+    return w1
+    
+end
+
+function work2(cache::DavidsonCache, range1::UnitRange{Int64},
+               range2::UnitRange{Int64})
+
+    dim1 = range1.stop - range1.start + 1
+    dim2 = range2.stop - range2.start + 1
+
+    len = length(range1) * length(range2)
+
+    istart = cache.work2_start + (range2.start - 1) * dim1
+    iend = istart + len - 1
+    
+    w2 = reshape(view(cache.Twork, istart:iend),
+                 (dim1, dim2))
+
+    return w2
+    
+end
+
+function work3(cache::DavidsonCache, range1::UnitRange{Int64},
+               range2::UnitRange{Int64})
+
+    dim1 = range1.stop - range1.start + 1
+    dim2 = range2.stop - range2.start + 1
+
+    len = length(range1) * length(range2)
+
+    istart = cache.work3_start + (range2.start - 1) * dim1
+    iend = istart + len - 1
+    
+    w3 = reshape(view(cache.Twork, istart:iend),
+                 (dim1, dim2))
+
+    return w3
+    
+end
+
+function work4(cache::DavidsonCache, range1::UnitRange{Int64},
+               range2::UnitRange{Int64})
+
+    dim1 = range1.stop - range1.start + 1
+    dim2 = range2.stop - range2.start + 1
+
+    len = length(range1) * length(range2)
+
+    istart = cache.work4_start + (range2.start - 1) * dim1
+    iend = istart + len - 1
+    
+    w4 = reshape(view(cache.Twork, istart:iend),
+                 (dim1, dim2))
+
+    return w4
+    
+end
+
+function evwork(cache::DavidsonCache, range::UnitRange{Int64})
+
+    len = length(range)
+
+    istart = cache.evwork_start + range.start - 1
+    iend = istart + len - 1
+    
+    work = view(cache.Twork, istart:iend)
+
+    return work
+    
+end
+
+function revwork(cache::DavidsonCache, range::UnitRange{Int64})
+
+    len = length(range)
+
+    istart = cache.revwork_start + range.start - 1
+    iend = istart + len - 1
+
+    rwork = view(cache.Rwork, istart:iend)
+
+    return rwork
     
 end

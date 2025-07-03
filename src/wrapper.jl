@@ -1,137 +1,55 @@
-function syev!(JOBZ::String,
-               UPLO::String,
-               N::Int64,
-               A::AbstractMatrix{Float64},
-               LDA::Int64,
-               W::AbstractVector{Float64},
-               WORK::AbstractVector{Float64},
-               LWORK::Int32,
-               INFO::Int32)
-    
-    ccall((:dsyev_, "libblastrampoline"),
+import LinearAlgebra.BLAS.@blasfunc
+
+function syev!(jobz::String, uplo::String, n::Int64,
+               a::AbstractMatrix{Float64}, lda::Int64,
+               w::AbstractVector{Float64}, work::AbstractVector{Float64},
+               lwork::Int64, info::Int64)
+
+    ccall((@blasfunc(dsyev_), LinearAlgebra.libblastrampoline),
           Cvoid,
-          (Cstring,      # JOBZ
-           Cstring,      # UPLO
-           Ref{Int32},   # N
-           Ptr{Float64}, # A
-           Ref{Int32},   # LDA
-           Ptr{Float64}, # W
-           Ptr{Float64}, # WORK
-           Ref{Int32},   # LWORK
-           Ref{Int32}),  #INFO
-          JOBZ,
-          UPLO,
-          N,
-          A,
-          LDA,
-          W,
-          WORK,
-          LWORK,
-          INFO)
+          (Cstring, Cstring, Ref{Int64}, Ptr{Float64}, Ref{Int64},
+           Ptr{Float64}, Ptr{Float64}, Ref{Int64}, Ref{Int64}),
+          jobz, uplo, n, a, lda, w, work, lwork, info)
+
+end
+
+function syev!(jobz::String, uplo::String, n::Int64,
+               a::AbstractMatrix{Float32}, lda::Int64,
+               w::AbstractVector{Float32}, work::AbstractVector{Float32},
+               lwork::Int64, info::Int64)
+
+    ccall((@blasfunc(ssyev_), LinearAlgebra.libblastrampoline),
+          Cvoid,
+          (Cstring, Cstring, Ref{Int64}, Ptr{Float64}, Ref{Int64},
+           Ptr{Float64}, Ptr{Float64}, Ref{Int64}, Ref{Int64}),
+          jobz, uplo, n, a, lda, w, work, lwork, info)
     
 end
 
-function syev!(JOBZ::String,
-               UPLO::String,
-               N::Int64,
-               A::AbstractMatrix{Float32},
-               LDA::Int64,
-               W::AbstractVector{Float32},
-               WORK::AbstractVector{Float32},
-               LWORK::Int32,
-               INFO::Int32)
+function heev!(jobz::String, uplo::String, n::Int64,
+               a::AbstractMatrix{ComplexF64}, lda::Int64,
+               w::AbstractVector{Float64}, work::AbstractVector{ComplexF64},
+               lwork::Int64, rwork::AbstractVector{Float64}, info::Int64)
 
-    ccall((:ssyev_, "libblastrampoline"),
+    ccall((@blasfunc(zheev_), LinearAlgebra.libblastrampoline),
           Cvoid,
-          (Cstring,      # JOBZ
-           Cstring,      # UPLO
-           Ref{Int32},   # N
-           Ptr{Float64}, # A
-           Ref{Int32},   # LDA
-           Ptr{Float64}, # W
-           Ptr{Float64}, # WORK
-           Ref{Int32},   # LWORK
-           Ref{Int32}),  #INFO
-          JOBZ,
-          UPLO,
-          N,
-          A,
-          LDA,
-          W,
-          WORK,
-          LWORK,
-          INFO)
+          (Cstring, Cstring, Ref{Int64}, Ptr{ComplexF64}, Ref{Int64},
+           Ptr{Float64}, Ptr{ComplexF64}, Ref{Int64}, Ptr{Float64},
+           Ref{Int64}),
+          jobz, uplo, n, a, lda, w, work, lwork, rwork, info)
     
 end
 
-function heev!(JOBZ::String,
-               UPLO::String,
-               N::Int64,
-               A::AbstractMatrix{ComplexF64},
-               LDA::Int64,
-               W::AbstractVector{Float64},
-               WORK::AbstractVector{ComplexF64},
-               LWORK::Int32,
-               RWORK::AbstractVector{Float64},
-               INFO::Int32)
+function heev!(jobz::String, uplo::String, n::Int64,
+               a::AbstractMatrix{ComplexF32}, lda::Int64,
+               w::AbstractVector{Float32}, work::AbstractVector{ComplexF32},
+               lwork::Int64, rwork::AbstractVector{Float32}, info::Int64)
 
-    ccall((:zheev_, "libblastrampoline"),
+    ccall((@blasfunc(cheev_), LinearAlgebra.libblastrampoline),
           Cvoid,
-          (Cstring,         # JOBZ
-           Cstring,         # UPLO
-           Ref{Int32},      # N
-           Ptr{ComplexF64}, # A
-           Ref{Int32},      # LDA
-           Ptr{Float64},    # W
-           Ptr{ComplexF64}, # WORK
-           Ref{Int32},      # LWORK
-           Ptr{Float64},    # RWORK
-           Ref{Int32}),     #INFO
-          JOBZ,
-          UPLO,
-          N,
-          A,
-          LDA,
-          W,
-          WORK,
-          LWORK,
-          RWORK,
-          INFO)
-    
-end
-
-function heev!(JOBZ::String,
-               UPLO::String,
-               N::Int64,
-               A::AbstractMatrix{ComplexF32},
-               LDA::Int64,
-               W::AbstractVector{Float32},
-               WORK::AbstractVector{ComplexF32},
-               LWORK::Int32,
-               RWORK::AbstractVector{Float32},
-               INFO::Int32)
-
-    ccall((:cheev_, "libblastrampoline"),
-          Cvoid,
-          (Cstring,         # JOBZ
-           Cstring,         # UPLO
-           Ref{Int32},      # N
-           Ptr{ComplexF32}, # A
-           Ref{Int32},      # LDA
-           Ptr{Float32},    # W
-           Ptr{ComplexF32}, # WORK
-           Ref{Int32},      # LWORK
-           Ptr{Float32},    # RWORK
-           Ref{Int32}),     #INFO
-          JOBZ,
-          UPLO,
-          N,
-          A,
-          LDA,
-          W,
-          WORK,
-          LWORK,
-          RWORK,
-          INFO)
+          (Cstring, Cstring, Ref{Int64}, Ptr{ComplexF32}, Ref{Int64},
+           Ptr{Float32}, Ptr{ComplexF32}, Ref{Int64}, Ptr{Float32},
+           Ref{Int64}),
+          jobz, uplo, n, a, lda, w, work, lwork, rwork, info)
     
 end

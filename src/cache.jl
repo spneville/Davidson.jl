@@ -28,13 +28,13 @@ mutable struct DavidsonCache{T, R} <: Cache
     niter::Int64
 
     # Subspace vectors
-    bvec::Matrix{T}
-        
-    # Sigma vectors
-    sigvec::Matrix{T}
+    bvec::Vector{T}
     
+    # Sigma vectors
+    sigvec::Vector{T}
+
     # Subspace matrix and eigenpairs
-    Gmat::Matrix{T}
+    Gmat::Vector{T}
     alpha::Vector{T}
     rho::Vector{R}
     rho1::Vector{R}
@@ -44,7 +44,7 @@ mutable struct DavidsonCache{T, R} <: Cache
     
     # Work arrays
     work1::Vector{R}
-    work2::Matrix{T}
+    work2::Vector{T}
     work3::Vector{T}
     work4::Vector{T}
 
@@ -78,20 +78,16 @@ mutable struct DavidsonCache{T, R} <: Cache
                               ) where T <: AllowedTypes
 
         # Real type
-        if T <: Union{Float32, ComplexF32}
-            R = Float32
-        else
-            R = Float64
-        end
+        R = T <: Allowed64 ? Float64 : Float32
 
         # Subspace vectors
-        bvec = Matrix{T}(undef, matdim, maxvec)
+        bvec = Vector{T}(undef, matdim*maxvec)
         
         # Sigma vectors
-        sigvec = Matrix{T}(undef, matdim, maxvec)
-        
+        sigvec = Vector{T}(undef, matdim*maxvec)
+
         # Subspace matrix and eigenpairs
-        Gmat = Matrix{T}(undef, maxvec, maxvec)
+        Gmat = Vector{T}(undef, maxvec*maxvec)
         alpha = Vector{T}(undef, maxvec*maxvec)
         rho = Vector{R}(undef, maxvec)
         rho1 = Vector{R}(undef, maxvec)
@@ -101,7 +97,7 @@ mutable struct DavidsonCache{T, R} <: Cache
         
         # Work arrays
         work1 = Vector{R}(undef, matdim)
-        work2 = Matrix{T}(undef, matdim,blocksize)
+        work2 = Vector{T}(undef, matdim*blocksize)
         work3 = Vector{T}(undef, maxvec*blocksize)
         work4 = Vector{T}(undef, blocksize*blocksize)
         

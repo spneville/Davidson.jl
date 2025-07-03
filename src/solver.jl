@@ -1,24 +1,23 @@
+#function solver(f::Function,
+#                hdiag::Vector{T},
+#                nroots::Int64,
+#                matdim::Int64;
+#                tol=1e-4,
+#                blocksize=nroots+5,
+#                maxvec=4*blocksize,
+#                niter=100,
+#                verbose=false) where T <: AllowedTypes
+#
+#    # Work array
+#    Twork, Rwork = workarrays(T, matdim, blocksize, maxvec)
+#    
+#    
+#end
+
 function solver(f::Function,
                 hdiag::Vector{T},
                 nroots::Int64,
                 matdim::Int64;
-                tol=1e-4,
-                blocksize=nroots+5,
-                maxvec=4*blocksize,
-                niter=100,
-                verbose=false) where T <: AllowedTypes
-
-    # Work array
-    Twork, Rwork = workarrays(T, matdim, blocksize, maxvec)
-    
-    
-end
-
-function solver(f::Function,
-                hdiag::Vector{T},
-                nroots::Int64,
-                matdim::Int64,
-                work::Vector{T};
                 tol=1e-4,
                 blocksize=nroots+5,
                 maxvec=4*blocksize,
@@ -87,22 +86,26 @@ function guessvec(cache::Cache)
     # as our guess vectors with the non-zero elements corresponding
     # to the lowest value diagonal matrix elements
     #
+
+    @unpack matdim, blocksize = cache
     
     # Sort the diagonal matrix elements
     # Note that these are constrained to be real for a symmetric or
     # Hermitian matrix
     hii = cache.work1
-    for i in 1:cache.matdim
+    for i in 1:matdim
         hii[i] = real(cache.hdiag[i])
     end
     ix = sortperm(hii)
 
     # Construct the guess vectors
     fill!(cache.bvec, 0.0)
+    b = reshape(view(cache.bvec, 1:matdim*blocksize),
+                (matdim, blocksize))
     for i in 1:cache.blocksize
-        cache.bvec[ix[i],i] = 1.0
+        b[ix[i],i] = 1.0
     end
-
+    
 end
 
 function run_gendav(cache::Cache, verbose::Bool)
@@ -166,26 +169,35 @@ end
 
 function sigma_vectors(cache::Cache)
 
+    @unpack nnew, currdim, matdim = cache
+    
     # Update the total no. σ-vector calculations
-    cache.nsigma = cache.nsigma + cache.nnew
+    cache.nsigma += nnew
     
     # Indices of the first and last subspace vectors for which
     # σ-vectors are required
-    ki = cache.currdim - cache.nnew + 1
-    kf = cache.currdim
-    
+    ki = currdim - nnew + 1
+    kf = currdim
+
+    # Start and end points in the vectorised b and σ vector
+    # arrays
+    istart = (ki - 1) * matdim + 1
+    iend = kf * matdim
+        
     # Compute the σ-vectors
-    b = view(cache.bvec, :, ki:kf)
-    σ = view(cache.sigvec, :, ki:kf)
+    b = reshape(view(cache.bvec, istart:iend),
+                (matdim, nnew))
+    σ = reshape(view(cache.sigvec, istart:iend),
+                (matdim, nnew))
     cache.f(b, σ)
-    
+
 end
 
 function subspace_matrix(cache::DavidsonCache{T}
                          ) where T <: AllowedTypes
 
     # Dimensions
-    @unpack currdim, nnew, zero, one = cache
+    @unpack matdim, currdim, nnew, zero, one = cache
 
     # Work array
     bsigma = reshape(view(cache.work3, 1:currdim*nnew),
@@ -195,19 +207,46 @@ function subspace_matrix(cache::DavidsonCache{T}
     # b^T sigma matrix product
     i1 = currdim - nnew + 1
     i2 = currdim
-    b = view(cache.bvec, :, 1:i2)
-    σ = view(cache.sigvec, :, i1:i2)
+    b = reshape(view(cache.bvec, 1:i2*matdim),
+                (matdim, currdim))
+    σ = reshape(view(cache.sigvec, (i1-1)*matdim+1:i2*matdim),
+                (matdim, nnew))    
     BLAS.gemm!('C', 'N', one, b, σ, zero, bsigma)
     
-    # Fill in the Gmat array
-    for i in 1:cache.currdim
-        for j in 1:cache.nnew
-            j1 = cache.currdim - cache.nnew + j
-            cache.Gmat[i,j1] = bsigma[i,j]
-            cache.Gmat[j1,i] = conj(cache.Gmat[i,j1])
+    # Re-order the Gmat working vector to be consistent
+    # with the new subspace dimension
+    olddim = currdim - nnew
+    if olddim > 0
+        
+        # Make a copy of the subspace matrix from the last iteration
+        Gmat = reshape(view(cache.Gmat, 1:olddim*olddim),
+                       (olddim, olddim))
+        tmp = reshape(view(cache.alpha, 1:olddim*olddim),
+                      (olddim, olddim))
+        copy!(tmp, Gmat)
+
+        # Fill in the old subspace block in the new ordering
+        Gmat = reshape(view(cache.Gmat, 1:currdim*currdim),
+                       (currdim, currdim))
+        for j in 1:olddim
+            for i in 1:olddim
+                Gmat[i,j] = tmp[i,j]
+            end
         end
+
     end
 
+    # Fill in the Gmat array
+    Gmat = reshape(view(cache.Gmat, 1:currdim*currdim),
+                       (currdim, currdim))
+    for i in 1:currdim
+        for j in 1:nnew
+            j1 = currdim - nnew + j
+            Gmat[i,j1] = bsigma[i,j]
+            Gmat[j1,i] = conj(Gmat[i,j1])
+        end
+    end
+    
 end
 
 function subspace_diag(cache::DavidsonCache{T}) where T <: AllowedFloat
@@ -225,7 +264,8 @@ function subspace_diag(cache::DavidsonCache{T}) where T <: AllowedFloat
     INFO = cache.info
 
     # Fill in the subspace matrix
-    G = cache.Gmat
+    G = reshape(view(cache.Gmat, 1:currdim*currdim),
+                (currdim, currdim))
     for j in 1:currdim
         for i in 1:currdim
             A[i,j] = G[i,j]
@@ -253,7 +293,8 @@ function subspace_diag(cache::DavidsonCache{T}) where T <: AllowedComplex
     INFO = cache.info
 
     # Fill in the subspace matrix
-    G = cache.Gmat
+    G = reshape(view(cache.Gmat, 1:currdim*currdim),
+                (currdim, currdim))
     for j in 1:currdim
         for i in 1:currdim
             A[i,j] = G[i,j]
@@ -291,14 +332,17 @@ function residual_vectors(cache::Cache)
     end
     
     # sigma alpha
-    σ = view(cache.sigvec, 1:matdim, 1:currdim)
+    σ = reshape(view(cache.sigvec, 1:matdim*currdim),
+                (matdim, currdim))
     α = reshape(view(cache.alpha, 1:currdim*blocksize),
                 (currdim, blocksize))
-    work2 = cache.work2
+    work2 = reshape(view(cache.work2, 1:matdim*blocksize),
+                    (matdim, blocksize))
     BLAS.gemm!('N', 'N', one, σ, α, zero, work2)
     
     # sigma alpha - b alpha_bar
-    bvec = view(cache.bvec, 1:matdim, 1:currdim)
+    bvec = reshape(view(cache.bvec, 1:matdim*currdim),
+                   (matdim, currdim))
     BLAS.gemm!('N', 'N', minus_one, bvec, alpha_bar, one, work2)
         
     #
@@ -320,7 +364,7 @@ function residual_vectors(cache::Cache)
     for k in 1:blocksize
 
         # Residual norm
-        w2 = view(work2, :, k:k)
+        w2 = view(cache.work2, (k-1)*matdim+1:k*matdim)
         rnorm[k] = real(sqrt(dot(w2, w2)))
         
         # Update the convergence information
@@ -333,8 +377,11 @@ function residual_vectors(cache::Cache)
             nnew = nnew + 1
 
             k1 = ki-1+nnew
-            b = view(bvec, :, k1:k1)
-            w2 = view(work2, :, k:k)
+            
+            b = view(bvec, (k1-1)*matdim+1:k1*matdim)
+            
+            w2 = view(cache.work2, (k-1)*matdim+1:k*matdim)
+            
             b = copy!(b, w2) 
             
             rho1[nnew] = rho[k]
@@ -369,9 +416,9 @@ end
 
 function correction_vectors(cache::Cache)
 
-    @unpack matdim, currdim, nnew, hdiag, rho1 = cache
+    @unpack matdim, maxvec, currdim, nnew, hdiag, rho1 = cache
 
-    bvec = cache.bvec
+    bvec = reshape(cache.bvec, (matdim, maxvec))
     
     #
     # Diagonal preconditioned residue correction vectors
@@ -399,10 +446,10 @@ end
 
 function subspace_vectors(cache::Cache)
 
-    @unpack T, matdim, currdim, nnew, zero, one = cache
+    @unpack T, matdim, maxvec, currdim, nnew, zero, one = cache
 
-    bvec = cache.bvec
-    sigvec = cache.sigvec
+    bvec = reshape(view(cache.bvec, 1:matdim*maxvec),
+                   (matdim, maxvec))
     work2 = cache.work2
     
     # Indices of the positions in the bvec array in which the new
@@ -426,8 +473,12 @@ function subspace_vectors(cache::Cache)
     # vectors
     Smat = reshape(view(cache.work3, 1:currdim*nnew), (currdim, nnew))
     
-    bprev = view(bvec, :, 1:currdim)
-    bnew = view(bvec, :, ki:kf)
+    bprev = reshape(view(cache.bvec, 1:matdim*currdim),
+                    (matdim, currdim))
+
+    bnew = reshape(view(cache.bvec, (ki-1)*matdim+1:kf*matdim),
+                   (matdim, nnew))
+    
     BLAS.gemm!('C', 'N', one, bprev, bnew, zero, Smat)
 
     # GS orthogonalisation of the correction vectors against the previous
@@ -435,17 +486,23 @@ function subspace_vectors(cache::Cache)
     k1 = 0
     for k in ki:kf
         k1 += 1
+
         for i in 1:currdim
             for j in 1:matdim
                 bvec[j,k] -= Smat[i,k1] * bvec[j,i]
             end
             
         end
-        bk = reshape(view(bvec, :, k:k), (matdim))
+
+        bk = reshape(view(cache.bvec, (k-1)*matdim+1:k*matdim),
+                     (matdim))
+        
         len_bk = sqrt(dot(bk, bk))
+
         for j in 1:matdim
             bk[j] /= len_bk
         end
+        
     end
 
     # Overlaps between the intermediately orthogonalised correction
@@ -460,7 +517,8 @@ function subspace_vectors(cache::Cache)
 
     # Symmetric orthogonalisation of the intermediately orthogonalised
     # correction vectors amongst themselves
-    w2 = view(work2, :, 1:nnew)
+    w2 = reshape(view(work2, 1:matdim*nnew), (matdim, nnew))
+    
     BLAS.gemm!('N', 'N', one, bnew, Sinvsq, zero, w2)
     copy!(bnew, w2)
 
@@ -543,9 +601,10 @@ function subspace_collapse(cache::Cache)
     # Compute the Ritz vectors. We will use the sigvec array as a
     # working array here to store the Ritz vectors
     #
+
+    @unpack blocksize, matdim = cache
     
     # Initialisation
-    blocksize = cache.blocksize
     currdim = cache.currdim
     sigvec = cache.sigvec
     fill!(sigvec, 0.0)
@@ -554,11 +613,12 @@ function subspace_collapse(cache::Cache)
     
     # Compute the Ritz vectors
     @unpack one, zero = cache
-    b = view(bvec, :, 1:currdim)
+    b = reshape(view(bvec, 1:matdim*currdim), (matdim, currdim))
     α = view(alpha, 1:currdim, 1:blocksize)
-    σ = view(sigvec, :, 1:blocksize)
+    σ = reshape(view(sigvec, 1:matdim*blocksize),
+                (matdim, blocksize))
     BLAS.gemm!('N', 'N', one, b, α, zero, σ)
-            
+    
     #
     # Collapse the subspace to be spanned by the lowest-lying Ritz vectors
     #
@@ -568,22 +628,24 @@ function subspace_collapse(cache::Cache)
     cache.nnew = cache.blocksize
 
     # Save the Ritz vectors as the new subspace vectors
-    b = view(bvec, :, 1:blocksize)
-    σ = view(sigvec, :, 1:blocksize)
+    b = reshape(view(bvec, 1:matdim*blocksize),
+                (matdim, blocksize))
+    σ = reshape(view(sigvec, 1:matdim*blocksize),
+                (matdim, blocksize))
     copy!(b, σ)
-    
-    
+
 end
 
 function eigenvectors!(vectors::Matrix{T}, cache::Cache
                        ) where T <: AllowedTypes
     
     # Compute the Ritz vectors for the nroots lowest roots
-    @unpack currdim, nroots, zero, one = cache
+    @unpack matdim, currdim, nroots, zero, one = cache
     alpha = reshape(view(cache.alpha, 1:currdim*nroots),
                     (currdim, nroots))
-    bvec = view(cache.bvec, :, 1:currdim)
-
+    bvec = reshape(view(cache.bvec, 1:matdim*currdim),
+                   (matdim, currdim))
+                   
     BLAS.gemm!('N', 'N', one, bvec, alpha, zero, vectors)
     
 end

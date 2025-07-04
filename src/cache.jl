@@ -1,4 +1,5 @@
-mutable struct DavidsonCache{T, R} <: Cache
+mutable struct DavidsonCache{T, R} <: Cache where {T<:AllowedTypes,
+                                                   R<:AllowedFloat}
     
     # Type parameter
     T::Type
@@ -65,21 +66,22 @@ mutable struct DavidsonCache{T, R} <: Cache
     revwork_start::Int64
     
     # Inner constructor
-    function DavidsonCache{T}(f::Function,
-                              hdiag::Vector{T},
-                              nroots::Int64,
-                              matdim::Int64,
-                              blocksize::Int64,
-                              maxvec::Int64,
-                              tol::Float64,
-                              niter::Int64,
-                              Twork::Vector{T},
-                              Rwork::Vector{<:AllowedFloat}
-                              ) where T <: AllowedTypes
+    function DavidsonCache{T, R}(f::Function,
+                                 hdiag::Vector{T},
+                                 nroots::Int64,
+                                 matdim::Int64,
+                                 blocksize::Int64,
+                                 maxvec::Int64,
+                                 tol::Float64,
+                                 niter::Int64,
+                                 Twork::Vector{T},
+                                 Rwork::Vector{R}
+                                 ) where {T<:AllowedTypes,
+                                          R<:AllowedFloat}
 
-        # Real type
-        R = T <: Allowed64 ? Float64 : Float32
-        @assert typeof(Rwork[1]) == R
+        # Make sure that the real type R is consistent with the matrix
+        # type T
+        @assert R == (T <: Allowed64 ? Float64 : Float32)
         
         # Counters, etc.
         currdim = 0

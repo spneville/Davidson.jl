@@ -24,12 +24,12 @@ function solver(f::Function,
                 nroots::Int64,
                 matdim::Int64,
                 Twork::Vector{T},
-                Rwork::Vector{<:AllowedFloat};
+                Rwork::Vector{R};
                 tol=1e-4,
                 blocksize=nroots+5,
                 maxvec=4*blocksize,
                 niter=100,
-                verbose=false) where T <: AllowedTypes
+                verbose=false) where {T<:AllowedTypes, R<:AllowedFloat}
 
     vectors = Matrix{T}(undef, matdim, nroots)
 
@@ -44,7 +44,7 @@ function solver(f::Function,
 end
 
 function solver!(vectors::Matrix{T},
-                 values::Vector{<:AllowedFloat},
+                 values::Vector{R},
                  f::Function,
                  hdiag::Vector{T},
                  nroots::Int64,
@@ -53,7 +53,7 @@ function solver!(vectors::Matrix{T},
                  blocksize=nroots+5,
                  maxvec=4*blocksize,
                  niter=100,
-                 verbose=false) where T <: AllowedTypes
+                 verbose=false) where {T<:AllowedTypes, R<:AllowedFloat}
     
     Twork, Rwork = workarrays(T, matdim, blocksize, maxvec)
     
@@ -64,25 +64,25 @@ function solver!(vectors::Matrix{T},
 end
 
 function solver!(vectors::Matrix{T},
-                 values::Vector{<:AllowedFloat},
+                 values::Vector{R},
                  f::Function,
                  hdiag::Vector{T},
                  nroots::Int64,
                  matdim::Int64,
                  Twork::Vector{T},
-                 Rwork::Vector{<:AllowedFloat};
+                 Rwork::Vector{R};
                  tol=1e-4,
                  blocksize=nroots+5,
                  maxvec=4*blocksize,
                  niter=100,
-                 verbose=false) where T <: AllowedTypes
+                 verbose=false) where {T <: AllowedTypes, R<:AllowedFloat}
 
     # Check on the input
     checkinp(nroots, blocksize, maxvec, matdim, Twork, Rwork)
     
     # Davidson cache
-    cache = DavidsonCache{T}(f, hdiag, nroots, matdim, blocksize,
-                             maxvec, tol, niter, Twork, Rwork)
+    cache = DavidsonCache{T, R}(f, hdiag, nroots, matdim, blocksize,
+                                maxvec, tol, niter, Twork, Rwork)
     
     # Construct the guess vectors
     guessvec(cache)

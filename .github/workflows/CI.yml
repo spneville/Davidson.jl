@@ -72,6 +72,6 @@ jobs:
         shell: julia --project=docs --color=yes {0}
         run: |
           using Documenter: DocMeta, doctest
-          using GenDav
-          DocMeta.setdocmeta!(GenDav, :DocTestSetup, :(using GenDav); recursive=true)
-          doctest(GenDav)
+          using Davidson
+          DocMeta.setdocmeta!(Davidson, :DocTestSetup, :(using Davidson); recursive=true)
+          doctest(Davidson)

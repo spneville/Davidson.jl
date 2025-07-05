@@ -1,6 +1,6 @@
-using GenDav
+using Davidson
 using Test
 
-@testset "GenDav.jl" begin
+@testset "Davidson.jl" begin
     # Write your tests here.
 end

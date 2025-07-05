@@ -1,14 +1,14 @@
-using GenDav
+using Davidson
 using Documenter
 
-DocMeta.setdocmeta!(GenDav, :DocTestSetup, :(using GenDav); recursive=true)
+DocMeta.setdocmeta!(Davidson, :DocTestSetup, :(using Davidson); recursive=true)
 
 makedocs(;
-    modules=[GenDav],
+    modules=[Davidson],
     authors="Simon Neville",
-    sitename="GenDav.jl",
+    sitename="Davidson.jl",
     format=Documenter.HTML(;
-        canonical="https://spneville.github.io/GenDav.jl",
+        canonical="https://spneville.github.io/Davidson.jl",
         edit_link="main",
         assets=String[],
     ),
@@ -18,6 +18,6 @@ makedocs(;
 )
 
 deploydocs(;
-    repo="github.com/spneville/GenDav.jl",
+    repo="github.com/spneville/Davidson.jl",
     devbranch="main",
 )

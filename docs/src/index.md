@@ -1,14 +1,14 @@
 ```@meta
-CurrentModule = GenDav
+CurrentModule = Davidson
 ```
 
-# GenDav
+# Davidson
 
-Documentation for [GenDav](https://github.com/spneville/GenDav.jl).
+Documentation for [Davidson](https://github.com/spneville/Davidson.jl).
 
 ```@index
 ```
 
 ```@autodocs
-Modules = [GenDav]
+Modules = [Davidson]
 ```

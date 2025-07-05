@@ -6,7 +6,7 @@ function solver(f::Function,
                 blocksize=nroots+5,
                 maxvec=4*blocksize,
                 niter=100,
-                verbose=false) where T <: AllowedTypes
+                verbose=false) where T<:AllowedTypes
 
     Twork, Rwork = workarrays(T, matdim, blocksize, maxvec)
     
@@ -75,7 +75,7 @@ function solver!(vectors::Matrix{T},
                  blocksize=nroots+5,
                  maxvec=4*blocksize,
                  niter=100,
-                 verbose=false) where {T <: AllowedTypes, R<:AllowedFloat}
+                 verbose=false) where {T<:AllowedTypes, R<:AllowedFloat}
 
     # Check on the input
     checkinp(nroots, blocksize, maxvec, matdim, Twork, Rwork)
@@ -241,20 +241,13 @@ function sigma_vectors(cache::Cache)
 
     # Compute the σ-vectors
     b = bvec(cache, 1:matdim, ki:kf)
-
-    #istart = (ki - 1) * matdim + 1
-    #iend = kf * matdim
-    #σ = reshape(view(cache.sigvec, istart:iend),
-    #            (matdim, nnew))
-
     σ = sigvec(cache, 1:matdim, ki:kf)
     
     cache.f(b, σ)
 
 end
 
-function subspace_matrix(cache::DavidsonCache{T}
-                         ) where T <: AllowedTypes
+function subspace_matrix(cache::DavidsonCache{T}) where T<:AllowedTypes
 
     # Dimensions
     @unpack matdim, currdim, nnew, zero, one = cache
@@ -267,10 +260,6 @@ function subspace_matrix(cache::DavidsonCache{T}
     i1 = currdim - nnew + 1
     i2 = currdim
     b = bvec(cache, 1:matdim, 1:i2)
-
-    #σ = reshape(view(cache.sigvec, (i1-1)*matdim+1:i2*matdim),
-    #            (matdim, nnew))
-
     σ = sigvec(cache, 1:matdim, i1:i2)
             
     BLAS.gemm!('C', 'N', one, b, σ, zero, bσ)
@@ -309,7 +298,7 @@ function subspace_matrix(cache::DavidsonCache{T}
     
 end
 
-function subspace_diag(cache::DavidsonCache{T}) where T <: AllowedFloat
+function subspace_diag(cache::DavidsonCache{T}) where T<:AllowedFloat
 
     currdim = cache.currdim
     
@@ -337,7 +326,7 @@ function subspace_diag(cache::DavidsonCache{T}) where T <: AllowedFloat
     
 end
 
-function subspace_diag(cache::DavidsonCache{T}) where T <: AllowedComplex
+function subspace_diag(cache::DavidsonCache{T}) where T<:AllowedComplex
 
     currdim = cache.currdim
     
@@ -452,19 +441,21 @@ function print_report(k::Int64, cache::Cache)
 
     # Table header
     if k == 1
-        println("\n", "*"^43)
-        println(" Iteration  Nvec   Max rnorm       Nconv")
-        println("*"^43)
+        println("\n", "*"^36)
+        println(" Iteration  Nvec  Max rnorm   Nconv")
+        println("*"^36)
     end
 
     # Information for the current iteration
     @unpack blocksize, currdim, iconv, nroots = cache
 
     resnorm = rnorm(cache, 1:blocksize)
+
     maxres = maximum(resnorm[1:nroots])
+
     nconv = sum(iconv)
 
-    println("$k $currdim $maxres $nconv")
+    @printf("%6d    %6d  %.4e %6d \n", k, currdim, maxres, nconv)
     
 end
 
@@ -577,7 +568,7 @@ end
 
 function invsqrt_matrix!(Ainvsq::AbstractMatrix{T},
                          A::AbstractMatrix{T}, cache::Cache
-                         ) where T <: AllowedFloat
+                         ) where T<:AllowedFloat
 
     #
     # N.B. this will overwrite the contents of the input matrix A
@@ -612,7 +603,7 @@ end
 
 function invsqrt_matrix!(Ainvsq::AbstractMatrix{T},
                          A::AbstractMatrix{T}, cache::Cache
-                         ) where T <: AllowedComplex
+                         ) where T<:AllowedComplex
 
     #
     # N.B. this will overwrite the contents of the input matrix A
@@ -668,12 +659,9 @@ function subspace_collapse(cache::Cache)
     
     α = view(α1, 1:currdim, 1:blocksize)
 
-    #σ = reshape(view(sigvec, 1:matdim*blocksize),
-    #            (matdim, blocksize))
-
-    σ = sigvec(cache, 1:matdim, 1:blocksize)
+    ritz = sigvec(cache, 1:matdim, 1:blocksize)
     
-    BLAS.gemm!('N', 'N', one, b, α, zero, σ)
+    BLAS.gemm!('N', 'N', one, b, α, zero, ritz)
     
     #
     # Collapse the subspace to be spanned by the lowest-lying Ritz vectors
@@ -685,18 +673,14 @@ function subspace_collapse(cache::Cache)
 
     # Save the Ritz vectors as the new subspace vectors
     b = bvec(cache, 1:matdim, 1:blocksize)
+    ritz = sigvec(cache, 1:matdim, 1:blocksize)
 
-    #σ = reshape(view(sigvec, 1:matdim*blocksize),
-    #            (matdim, blocksize))
-
-    σ = sigvec(cache, 1:matdim, 1:blocksize)
-
-    copy!(b, σ)
+    copy!(b, ritz)
 
 end
 
-function eigenvectors!(vectors::Matrix{T}, cache::Cache
-                       ) where T <: AllowedTypes
+function eigenvectors!(vectors::Matrix{T},
+                       cache::Cache) where T<:AllowedTypes
     
     # Compute the Ritz vectors for the nroots lowest roots
     @unpack matdim, currdim, nroots, zero, one = cache

@@ -1,5 +1,16 @@
+"""
+   solver(f, diag, nroots, matdim)
+
+Davidson eigensolver
+
+# Arguments
+* `f`: Matrix-vector multiplication function
+* `diag`: Diagonal of the matrix whose eigenpairs are sought
+* `nroots`: number of eigenpairs to compute
+* `matdim`: Dimension of the matrix
+"""
 function solver(f::Function,
-                hdiag::Vector{T},
+                diag::Vector{T},
                 nroots::Int64,
                 matdim::Int64;
                 tol=1e-4,
@@ -11,7 +22,7 @@ function solver(f::Function,
 
     Twork, Rwork = workarrays(T, matdim, blocksize, maxvec)
     
-    vectors, values = solver(f, hdiag, nroots, matdim, Twork, Rwork;
+    vectors, values = solver(f, diag, nroots, matdim, Twork, Rwork;
                              tol=tol, blocksize=blocksize,
                              maxvec=maxvec, niter=niter,
                              verbose=verbose, guess=guess)
@@ -21,7 +32,7 @@ function solver(f::Function,
 end
 
 function solver(f::Function,
-                hdiag::Vector{T},
+                diag::Vector{T},
                 nroots::Int64,
                 matdim::Int64,
                 Twork::Vector{T},
@@ -37,7 +48,7 @@ function solver(f::Function,
 
     values = Vector{eltype(Rwork)}(undef, nroots)
 
-    solver!(vectors, values, f, hdiag, nroots, matdim, Twork, Rwork;
+    solver!(vectors, values, f, diag, nroots, matdim, Twork, Rwork;
             tol=tol, blocksize=blocksize, maxvec=maxvec, niter=niter,
             verbose=verbose, guess=guess)
 
@@ -48,7 +59,7 @@ end
 function solver!(vectors::Matrix{T},
                  values::Vector{R},
                  f::Function,
-                 hdiag::Vector{T},
+                 diag::Vector{T},
                  nroots::Int64,
                  matdim::Int64;
                  tol=1e-4,
@@ -60,7 +71,7 @@ function solver!(vectors::Matrix{T},
     
     Twork, Rwork = workarrays(T, matdim, blocksize, maxvec)
     
-    solver!(vectors, values, f, hdiag, nroots, matdim, Twork,
+    solver!(vectors, values, f, diag, nroots, matdim, Twork,
             Rwork; tol=tol, blocksize=blocksize, maxvec=maxvec,
             niter=niter, verbose=verbose, guess=guess)
 
@@ -69,7 +80,7 @@ end
 function solver!(vectors::Matrix{T},
                  values::Vector{R},
                  f::Function,
-                 hdiag::Vector{T},
+                 diag::Vector{T},
                  nroots::Int64,
                  matdim::Int64,
                  Twork::Vector{T},
@@ -85,7 +96,7 @@ function solver!(vectors::Matrix{T},
     checkinp(nroots, blocksize, maxvec, matdim, Twork, Rwork)
     
     # Davidson cache
-    cache = DavidsonCache{T, R}(f, hdiag, nroots, matdim, blocksize,
+    cache = DavidsonCache{T, R}(f, diag, nroots, matdim, blocksize,
                                 maxvec, tol, niter, Twork, Rwork)
     
     # Construct the guess vectors
@@ -168,7 +179,7 @@ function guessvec(cache::Cache)
     # Hermitian matrix
     hii = work1(cache, 1:matdim)
     for i in 1:matdim
-        hii[i] = real(cache.hdiag[i])
+        hii[i] = real(cache.diag[i])
     end
     ix = sortperm(hii)
 
@@ -535,7 +546,7 @@ end
 
 function correction_vectors(cache::Cache)
 
-    @unpack matdim, maxvec, currdim, nnew, hdiag = cache
+    @unpack matdim, maxvec, currdim, nnew, diag = cache
 
     ρ1 = rho1(cache, 1:maxvec)
     
@@ -558,7 +569,7 @@ function correction_vectors(cache::Cache)
         
         # Loop over elements of the correction vector
         for i in 1:matdim
-            b[i,k] = -b[i,k] / (hdiag[i]-ρ1[k1])
+            b[i,k] = -b[i,k] / (diag[i]-ρ1[k1])
         end
             
     end

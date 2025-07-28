@@ -8,7 +8,7 @@ mutable struct DavidsonCache{T, R} <: Cache where {T<:AllowedTypes,
     f::Function
 
     # Diagonal of the matrix whose eigenpairs are sought
-    hdiag::Vector{T}
+    diag::Vector{T}
     
     # Number of roots to compute
     nroots::Int64
@@ -67,7 +67,7 @@ mutable struct DavidsonCache{T, R} <: Cache where {T<:AllowedTypes,
     
     # Inner constructor
     function DavidsonCache{T, R}(f::Function,
-                                 hdiag::Vector{T},
+                                 diag::Vector{T},
                                  nroots::Int64,
                                  matdim::Int64,
                                  blocksize::Int64,
@@ -110,7 +110,7 @@ mutable struct DavidsonCache{T, R} <: Cache where {T<:AllowedTypes,
         rho_start, rho1_start, rnorm_start, work1_start,
         revwork_start = Rwork_offsets(matdim, blocksize, maxvec)
         
-        new{T, R}(T, f, hdiag, nroots, matdim, blocksize, maxvec, tol,
+        new{T, R}(T, f, diag, nroots, matdim, blocksize, maxvec, tol,
                   niter, currdim, nconv, nnew,
                   nsigma, iconv, lwork, info, minus_one,
                   zero, one, Twork, Rwork, bvec_start, sigvec_start,

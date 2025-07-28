@@ -6,14 +6,15 @@ function solver(f::Function,
                 blocksize=nroots+5,
                 maxvec=4*blocksize,
                 niter=100,
-                verbose=false) where T<:AllowedTypes
+                verbose=false,
+                guess=false) where T<:AllowedTypes
 
     Twork, Rwork = workarrays(T, matdim, blocksize, maxvec)
     
     vectors, values = solver(f, hdiag, nroots, matdim, Twork, Rwork;
                              tol=tol, blocksize=blocksize,
                              maxvec=maxvec, niter=niter,
-                             verbose=verbose)
+                             verbose=verbose, guess=guess)
     
     return vectors, values
     
@@ -29,7 +30,8 @@ function solver(f::Function,
                 blocksize=nroots+5,
                 maxvec=4*blocksize,
                 niter=100,
-                verbose=false) where {T<:AllowedTypes, R<:AllowedFloat}
+                verbose=false,
+                guess=false) where {T<:AllowedTypes, R<:AllowedFloat}
 
     vectors = Matrix{T}(undef, matdim, nroots)
 
@@ -37,7 +39,7 @@ function solver(f::Function,
 
     solver!(vectors, values, f, hdiag, nroots, matdim, Twork, Rwork;
             tol=tol, blocksize=blocksize, maxvec=maxvec, niter=niter,
-            verbose=verbose)
+            verbose=verbose, guess=guess)
 
     return vectors, values
     
@@ -53,13 +55,14 @@ function solver!(vectors::Matrix{T},
                  blocksize=nroots+5,
                  maxvec=4*blocksize,
                  niter=100,
-                 verbose=false) where {T<:AllowedTypes, R<:AllowedFloat}
+                 verbose=false,
+                 guess=false) where {T<:AllowedTypes, R<:AllowedFloat}
     
     Twork, Rwork = workarrays(T, matdim, blocksize, maxvec)
     
     solver!(vectors, values, f, hdiag, nroots, matdim, Twork,
             Rwork; tol=tol, blocksize=blocksize, maxvec=maxvec,
-            niter=niter, verbose=verbose)
+            niter=niter, verbose=verbose, guess=guess)
 
 end
 
@@ -75,7 +78,8 @@ function solver!(vectors::Matrix{T},
                  blocksize=nroots+5,
                  maxvec=4*blocksize,
                  niter=100,
-                 verbose=false) where {T<:AllowedTypes, R<:AllowedFloat}
+                 verbose=false,
+                 guess=false) where {T<:AllowedTypes, R<:AllowedFloat}
 
     # Check on the input
     checkinp(nroots, blocksize, maxvec, matdim, Twork, Rwork)
@@ -85,8 +89,12 @@ function solver!(vectors::Matrix{T},
                                 maxvec, tol, niter, Twork, Rwork)
     
     # Construct the guess vectors
-    guessvec(cache)
-
+    if guess
+        guessvec_user(cache, vectors)
+    else
+        guessvec(cache)
+    end
+        
     # Run the generalised Davidson algorithm
     run_gendav(cache, verbose)
 
@@ -161,11 +169,55 @@ function guessvec(cache::Cache)
 
     # Construct the guess vectors
     b = bvec(cache, 1:matdim, 1:blocksize)
-    fill!(b, 0.0)        
+    fill!(b, 0.0)
     for i in 1:cache.blocksize
         b[ix[i],i] = 1.0
     end
     
+end
+
+function guessvec_user(cache::DavidsonCache{T},
+                       vectors::Matrix{T}) where T<:AllowedTypes
+
+    @unpack nroots, blocksize, matdim, one, zero = cache
+
+    # Input vectors
+    v = vectors
+    
+    # The user supplies nroots guess vectors, and we need
+    # blocksize guess vectors.
+    # So, we need to generate nextra = blocksize - nroots
+    # extra guess vectors
+    nextra = blocksize - nroots
+
+    # Generate nextra random normalised vectors
+    x = rand(matdim, nextra)
+    for i in 1:nextra
+        x[:,i] /= sqrt(dot(x[:,i], x[:,i]))
+    end
+    
+    # Combined basis {vᵢ} ⋃ {xᵢ}
+    g = Matrix{T}(undef, matdim, blocksize)
+    for i in 1:nroots
+        g[:,i] = v[:,i]
+    end
+    for i in 1:nextra
+        g[:,nroots+i] = x[:,i]
+    end
+
+    # Overlaps of the combined basis vectors
+    S = work3(cache, 1:blocksize, 1:blocksize)
+    BLAS.gemm!('C', 'N', one, g, g, zero, S)
+
+    # Inverse square root of the overlap matrix
+    # Note that invsqrt_matrix will overwrite the S matrix
+    Sinvsq = work4(cache, 1:blocksize, 1:blocksize)
+    invsqrt_matrix!(Sinvsq, S, cache)
+
+    # Symmetric orthogonalisation of the combined basis vectors
+    b = bvec(cache, 1:matdim, 1:blocksize)
+    BLAS.gemm!('N', 'N', one, g, Sinvsq, zero, b)
+
 end
 
 function run_gendav(cache::Cache, verbose::Bool)

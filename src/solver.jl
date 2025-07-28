@@ -114,7 +114,8 @@ function checkinp(nroots::Int64, blocksize::Int64, maxvec::Int64,
     # The block size must be greater than or equal to the number
     # of roots
     if blocksize < nroots
-        @error "Block size is less than the no. roots"
+        @error "Block size is less than the no. roots" blocksize nroots
+        exit()
     end
 
     # The maximum subspace dimension must be a multiple of the
@@ -122,28 +123,32 @@ function checkinp(nroots::Int64, blocksize::Int64, maxvec::Int64,
     if mod(maxvec, blocksize) != 0
         @error "The maximum subspace dimension must be a multiple" *
             " of the block size"
+        exit()
     end
 
     # The maximum subspace dimension must be greater than the blocksize
     if maxvec <= blocksize
         @error "The maximum subspace dimension must be greater" *
-            " than the blocksize"
+            " than the blocksize" maxvec blocksize
     end
 
     # The maximum subspace dimension cannot be greater than the matrix
     # dimension
     if maxvec > matdim
         @error "The maximum subspace dimension cannot be greater" *
-            " than the matrix dimension"
+            " than the matrix dimension" maxvec matdim
+        exit()
     end
 
     # Work array dimensions
     if size(Rwork)[1] < Rworksize(matdim, blocksize, maxvec)
         @error "Rwork is not large enough"
+        exit() 
     end
 
     if size(Twork)[1] < Tworksize(matdim, blocksize, maxvec)
         @error "Twork is not large enough"
+        exit()
     end
     
 end
@@ -181,30 +186,47 @@ function guessvec_user(cache::DavidsonCache{T},
 
     @unpack nroots, blocksize, matdim, one, zero = cache
 
+    # Number of user-supplied guess vectors
+    nuser = size(vectors)[2]
+
+    # Check on the number of user-supplied vectors
+    if nuser < nroots
+        @error "The no. of user-supplied guess vectors is less" *
+            " than the no. roots" nuser nroots
+        exit()
+    end
+    if nuser > blocksize
+        @error "The no. of user-supplied guess vectors is greater" *
+            " than the block size" nuser blocksize
+        exit()
+    end
+    
+    # The user supplies nuser guess vectors, and we need
+    # blocksize guess vectors.
+    # So, we need to generate nextra = blocksize - nuser
+    # extra guess vectors
+    nextra = blocksize - nuser
+
     # Input vectors
     v = vectors
     
-    # The user supplies nroots guess vectors, and we need
-    # blocksize guess vectors.
-    # So, we need to generate nextra = blocksize - nroots
-    # extra guess vectors
-    nextra = blocksize - nroots
-
-    # Generate nextra random normalised vectors
-    x = rand(matdim, nextra)
-    for i in 1:nextra
-        x[:,i] /= sqrt(dot(x[:,i], x[:,i]))
-    end
-    
-    # Combined basis {vᵢ} ⋃ {xᵢ}
-    g = Matrix{T}(undef, matdim, blocksize)
-    for i in 1:nroots
-        g[:,i] = v[:,i]
+    # Combined basis {vᵢ} ⋃ {xᵢ}, where the xᵢ are random extra normalised
+    # vectors
+    g = work2(cache, 1:matdim, 1:blocksize)
+    for i in 1:nuser
+        @views g[:,i] = v[:,i]
     end
     for i in 1:nextra
-        g[:,nroots+i] = x[:,i]
+        for j in 1:matdim
+            g[j,nuser+i] = rand()
+        end
+        @views norm = sqrt(dot(g[:,nuser+i], g[:,nuser+i]))
+        for j in 1:matdim
+            g[j,nuser+i] /= norm
+        end
+        
     end
-
+        
     # Overlaps of the combined basis vectors
     S = work3(cache, 1:blocksize, 1:blocksize)
     BLAS.gemm!('C', 'N', one, g, g, zero, S)
@@ -217,7 +239,7 @@ function guessvec_user(cache::DavidsonCache{T},
     # Symmetric orthogonalisation of the combined basis vectors
     b = bvec(cache, 1:matdim, 1:blocksize)
     BLAS.gemm!('N', 'N', one, g, Sinvsq, zero, b)
-
+        
 end
 
 function run_gendav(cache::Cache, verbose::Bool)
@@ -740,8 +762,10 @@ function eigenvectors!(vectors::Matrix{T},
     α = alpha(cache, 1:currdim, 1:nroots)
     
     b = bvec(cache, 1:matdim, 1:currdim)
+
+    v = view(vectors, 1:matdim, 1:nroots)
     
-    BLAS.gemm!('N', 'N', one, b, α, zero, vectors)
+    BLAS.gemm!('N', 'N', one, b, α, zero, v)
     
 end
 

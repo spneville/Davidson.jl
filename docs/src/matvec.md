@@ -1,0 +1,3 @@
+# [Matrix-Vector Multiplication](@id matvec)
+This section details the required form of the matrix-vector
+multiplication function...

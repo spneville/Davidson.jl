@@ -31,7 +31,8 @@ makedocs(;
     ),
     pages=[
         "Home" => "index.md",
-        "solver" => "solver.md"
+        "solver" => "solver.md",
+        "Matrix-Vector Multiplication" => "matvec.md"
     ],
 )
 

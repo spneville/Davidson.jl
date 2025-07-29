@@ -1,16 +1,36 @@
 """
-   solver(f::Function, diag::Vector{T}, nroots::Int64, matdim::Int64;
-          tol::Float64=1e-4, blocksize::Int64=nroots+5,
-          maxvec::Int64=4*blocksize, niter::Int64=100,
-          verbose::Bool=false) where T<:AllowedTypes
-
-Davidson eigensolver
+    solver(f, diag, nroots, matdim; tol=1e-4, blocksize=nroots+5,
+           maxvec=4*blocksize, niter=100, verbose=false)
 
 # Arguments
-* `f`: Matrix-vector multiplication function
-* `diag`: Diagonal of the matrix whose eigenpairs are sought
-* `nroots`: number of eigenpairs to compute
-* `matdim`: Dimension of the matrix
+
+* `f::Function`: In-place matrix-vector multiplication function
+* `diag::Matrix{T}`: Diagonal of the matrix whose eigenpairs are sought
+* `nroots::Int64`: Number of eigenpairs to compute
+* `matdim::Int64`: Dimension of the matrix
+
+# Optional keyword arguments
+
+* `tol::Float64`: Residual norm convergence threshold
+* `blocksize::Int64`: Block size
+* `maxvec::Int64`: Maximum subspace dimension
+* `niter::Int64`: Maximum number of iterations
+* `verbose::Bool`: Verbose output flag. If true, then a summary is printed
+                   at the end of each iteration
+
+# Returns
+
+* `vectors::Matrix{T}`: Matrix of eigenvectors
+* `values::Vector{R}`: Vector of eigenvalues
+
+# A note on the matrix-vector multiplication function
+
+Let the matrix whose eigenpairs are sought be denoted by `A`. The in-place
+`Function` `f` recieves takes as arguments an `AbstractMatrix` of vectors `ν`
+and an `AbstractMatrix` of matrix-vector products `Aν` that is to be computed.
+The required form of this function is detailed in
+[Matrix-Vector Multiplication](@ref matvec) section.
+
 """
 function solver(f::Function,
                 diag::Vector{T},

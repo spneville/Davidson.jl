@@ -1,14 +1,5 @@
-```@meta
-CurrentModule = Davidson
-```
+# [Davidson.jl](@id man-davidson)
+A Julia package implementing the Davidson algorithm for the
+calculation of the lowest-lying eigenpairs of large, sparse,
+diagonally dominant matrices.
 
-# Davidson
-
-Documentation for [Davidson](https://github.com/spneville/Davidson.jl).
-
-```@index
-```
-
-```@autodocs
-Modules = [Davidson]
-```

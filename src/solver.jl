@@ -1,5 +1,8 @@
 """
-   solver(f, diag, nroots, matdim)
+   solver(f::Function, diag::Vector{T}, nroots::Int64, matdim::Int64;
+          tol::Float64=1e-4, blocksize::Int64=nroots+5,
+          maxvec::Int64=4*blocksize, niter::Int64=100,
+          verbose::Bool=false, guess::Bool=false) where T<:AllowedTypes
 
 Davidson eigensolver
 

@@ -1,7 +1,7 @@
-@testset "Float32" begin
+@testset "Float64" begin
 
-    T = Float32
-    R = Float32
+    T = Float64
+    R = Float64
     
     zero::T = 0.0
     one::T = 1.0
@@ -36,7 +36,7 @@
     # Residual norm convergence threshold
     ϵ = 1e-4
     
-    # GenDav eigensolver
+    # Davidson eigensolver
     v, λ = solver(sigma!, diagA, nroots, matdim; tol=ϵ)
     
     # LinaerAlgebra eigen function

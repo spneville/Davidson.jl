@@ -2,7 +2,7 @@
    solver(f::Function, diag::Vector{T}, nroots::Int64, matdim::Int64;
           tol::Float64=1e-4, blocksize::Int64=nroots+5,
           maxvec::Int64=4*blocksize, niter::Int64=100,
-          verbose::Bool=false, guess::Bool=false) where T<:AllowedTypes
+          verbose::Bool=false) where T<:AllowedTypes
 
 Davidson eigensolver
 
@@ -20,15 +20,14 @@ function solver(f::Function,
                 blocksize=nroots+5,
                 maxvec=4*blocksize,
                 niter=100,
-                verbose=false,
-                guess=false) where T<:AllowedTypes
+                verbose=false) where T<:AllowedTypes
 
     Twork, Rwork = workarrays(T, matdim, blocksize, maxvec)
     
     vectors, values = solver(f, diag, nroots, matdim, Twork, Rwork;
                              tol=tol, blocksize=blocksize,
                              maxvec=maxvec, niter=niter,
-                             verbose=verbose, guess=guess)
+                             verbose=verbose)
     
     return vectors, values
     
@@ -44,8 +43,7 @@ function solver(f::Function,
                 blocksize=nroots+5,
                 maxvec=4*blocksize,
                 niter=100,
-                verbose=false,
-                guess=false) where {T<:AllowedTypes, R<:AllowedFloat}
+                verbose=false) where {T<:AllowedTypes, R<:AllowedFloat}
 
     vectors = Matrix{T}(undef, matdim, nroots)
 
@@ -53,7 +51,7 @@ function solver(f::Function,
 
     solver!(vectors, values, f, diag, nroots, matdim, Twork, Rwork;
             tol=tol, blocksize=blocksize, maxvec=maxvec, niter=niter,
-            verbose=verbose, guess=guess)
+            verbose=verbose, guess=false)
 
     return vectors, values
     

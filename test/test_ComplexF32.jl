@@ -38,7 +38,7 @@ using Davidson
     # Residual norm convergence threshold
     ϵ = 1e-4
     
-    # GenDav eigensolver
+    # Davidson eigensolver
     v, λ = solver(sigma!, diagA, nroots, matdim; tol=ϵ)
     
     # LinaerAlgebra eigen function

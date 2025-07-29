@@ -1,6 +1,6 @@
-@testset "Float64" begin
+@testset "Float64, in-place" begin
 
-    T = Float64
+    T = ComplexF64
     R = Float64
     
     zero::T = 0.0
@@ -35,9 +35,13 @@
     
     # Residual norm convergence threshold
     ϵ = 1e-4
-    
-    # GenDav eigensolver
-    v, λ = solver(sigma!, diagA, nroots, matdim; tol=ϵ)
+
+    # Eigenvectors and eigenvalues
+    v = Matrix{T}(undef, matdim, nroots)
+    λ = Vector{R}(undef, matdim)
+
+    # Davidson in-place eigensolver
+    solver!(v, λ, sigma!, diagA, nroots, matdim; tol=ϵ)
     
     # LinaerAlgebra eigen function
     F = eigen(A)

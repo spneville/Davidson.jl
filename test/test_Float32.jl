@@ -1,9 +1,7 @@
-using Davidson
+@testset "Float32" begin
 
-@testset "ComplexF64" begin
-
-    T = ComplexF64
-    R = Float64
+    T = Float32
+    R = Float32
     
     zero::T = 0.0
     one::T = 1.0

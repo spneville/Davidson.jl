@@ -5,7 +5,7 @@
 # Arguments
 
 * `f::Function`: In-place matrix-vector multiplication function
-* `diag::Matrix{T}`: Diagonal of the matrix whose eigenpairs are sought
+* `diag::Matrix{T}`: Diagonal of the matrix whose eigenpairs are sought, where [`T<:AllowedTypes`](@ref AllowedTypes)
 * `nroots::Int64`: Number of eigenpairs to compute
 * `matdim::Int64`: Dimension of the matrix
 
@@ -18,7 +18,9 @@
 * `verbose::Bool`: Verbose output flag. If true, then a summary is printed
                    at the end of each iteration
 
-# Returns
+# Return values
+
+The return value is of the form `vectors, values = solver(…)`, where
 
 * `vectors::Matrix{T}`: Matrix of eigenvectors
 * `values::Vector{R}`: Vector of eigenvalues
@@ -98,6 +100,41 @@ function solver!(vectors::Matrix{T},
 
 end
 
+"""
+    solver!(vectors, values, f, diag, nroots, matdim, [Twork, Rwork];
+            tol=1e-4, blocksize=nroots+5, maxvec=4*blocksize, niter=100,
+            verbose=false, guess=false)
+
+# Arguments
+
+* `vectors::Matrix{T}`: Eigenvectors, where [`T<:AllowedTypes`](@ref AllowedTypes)
+* `values::Vector{R}`: Eigenvalues, where [`R<:AllowedFloat`](@ref AllowedFloat)
+* `f::Function`: In-place matrix-vector multiplication function
+* `diag::Matrix{T}`: Diagonal of the matrix whose eigenpairs are sought, where [`T<:AllowedTypes`](@ref AllowedTypes)
+* `nroots::Int64`: Number of eigenpairs to compute
+* `matdim::Int64`: Dimension of the matrix
+
+# Optional arguments
+
+The following two pre-allocated work arrays may be supplied:
+
+* `Twork::Vector{T}`: Type [`T<:AllowedTypes`](@ref AllowedTypes) work array
+* `Rwork::Vector{R}`: Type [`R<:AllowedFloat`](@ref AllowedFloat) work array
+
+See [Work arrays](@ref WorkArrays) for the procedure for determining the required length of thse vectors.
+
+# Optional keyword arguments
+
+* `tol::Float64`: Residual norm convergence threshold
+* `blocksize::Int64`: Block size
+* `maxvec::Int64`: Maximum subspace dimension
+* `niter::Int64`: Maximum number of iterations
+* `verbose::Bool`: Verbose output flag. If true, then a summary is printed
+                   at the end of each iteration
+* `guess::Bool`: If `true`, then on input, the `vectors` array is taken to
+                 contain the guess vectors
+
+"""
 function solver!(vectors::Matrix{T},
                  values::Vector{R},
                  f::Function,

@@ -30,8 +30,10 @@ makedocs(;
     pages=[
         "Home" => "index.md",
         "solver" => "solver.md",
+        "solver!" => "solver_inplace.md",
         "Matrix-vector multiplication function" => "matvec.md",
-        "AllowedTypes" => "allowed_types.md"
+        "Allowed types" => "allowed_types.md",
+        "Creating work arrays" => "work_arrays.md"
     ],
 )
 

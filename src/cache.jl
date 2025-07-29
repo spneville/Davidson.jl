@@ -122,6 +122,27 @@ mutable struct DavidsonCache{T, R} <: Cache where {T<:AllowedTypes,
 
 end
 
+"""
+    workarrays(T, matdim, blocksize, maxvec)
+
+Constructs the `Twork` and `Rwork` work arrays required to make the
+in-place `solver!` function allocation-free.
+
+# Arguments
+
+* `T<:AllowedTypes`: Matrix type
+* `matdim::Int64`: Dimension of the matrix
+* `blocksize::Int64`: Block size
+* `maxvec::Int64`: Maximum subspace dimension
+
+# Return values
+
+The return value is of the form `Twork, Rwork = workarrays(…)`, where
+
+* `Twork::Vector{T<:AllowedTypes}`
+* `Rwork::Vector{R<:AllowedFloat}`, where `R` is compatible with `T`
+
+"""
 function workarrays(T::DataType, matdim::Int64, blocksize::Int64,
                     maxvec::Int64)
 

@@ -12,9 +12,13 @@ Two work vectors have to be supplied:
 
 where the types `T` and `R` are compatible (see [`Allowed types`](@ref AllowedTypes))
 
-## Dimensions of `Twork` and `Rwork`
+## Generating the work arrays
 
 The required dimensions of the `Twork` and `Rwork` vectors are dependent on
 the size of the matrix being diagonalised, the block size, and the maximum
-subspace dimension. There exist two functions, `Tworksize` and `Rworksize`,
-that can be used to compute these dimensions.
+subspace dimension. There exists a function, `workarrays`, that will return
+the correctly dimensioned arrays given these values.
+
+```@docs
+workarrays
+```

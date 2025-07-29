@@ -14,7 +14,7 @@ AllowedFloat
 
 ## Compatible types
 The arrays of type `R<:AllowedFloat` supplied to the `solver` and `solver!` functions
-must be compatible with the arrays of type `R<:AllowedTypes`. For example, if `T==ComplexF64`, then
+must be compatible with the arrays of type `T<:AllowedTypes`. For example, if `T==ComplexF64`, then
 it is required that `R==Float64`. The following table lists the compatible type pairs:
 
 | `T`           | `R`         |

@@ -8,7 +8,8 @@ using InteractiveUtils
 """
     AllowedFloat = Union{Float32, Float64}
 
-The allowed types `R` of the eigenvalues and on-diagonal matrix elements.
+The allowed real number types `R` that are compatible with the allowed
+matrix types `T`
 """
 AllowedFloat = Union{Float32, Float64}
 

@@ -41,7 +41,7 @@
     λ = Vector{R}(undef, matdim)
 
     # Davidson in-place eigensolver
-    solver!(v, λ, sigma!, diagA, nroots, matdim; tol=ϵ)
+    result = solver!(v, λ, sigma!, diagA, nroots, matdim; tol=ϵ)
     
     # LinaerAlgebra eigen function
     F = eigen(A)

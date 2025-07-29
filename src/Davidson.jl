@@ -25,16 +25,21 @@ AllowedTypes = Union{AllowedFloat, AllowedComplex}
 Allowed64 = Union{Float64, ComplexF64}
 
 abstract type Cache end
+abstract type Results end
 
 export AllowedTypes
 export AllowedFloat
 
 export solver, solver!
 export DavidsonCache
+export EigenPairs
+export ConvInfo
 export workarrays
 
 include("cache.jl")
 include("wrapper.jl")
+include("eigenpairs.jl")
+include("convinfo.jl")
 include("solver.jl")
 
 end

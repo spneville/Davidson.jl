@@ -37,13 +37,13 @@
     ϵ = 1e-4
     
     # Davidson eigensolver
-    v, λ = solver(sigma!, diagA, nroots, matdim; tol=ϵ)
+    result = solver(sigma!, diagA, nroots, matdim; tol=ϵ)
     
     # LinaerAlgebra eigen function
     F = eigen(A)
     
     # Difference relative to the full diagonalisation results
-    Δ = abs.(F.values[1:nroots] - λ)
+    Δ = abs.(F.values[1:nroots] - result.values)
 
     @test any(i -> i > ϵ^2 * 100, Δ) == false
 

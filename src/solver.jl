@@ -5,7 +5,7 @@
 # Arguments
 
 * `f::Function`: In-place matrix-vector multiplication function
-* `diag::Matrix{T}`: Diagonal of the matrix whose eigenpairs are sought, where [`T<:AllowedTypes`](@ref AllowedTypes)
+* `diag::Vector{T}`: Diagonal of the matrix whose eigenpairs are sought, where [`T<:AllowedTypes`](@ref AllowedTypes)
 * `nroots::Int64`: Number of eigenpairs to compute
 * `matdim::Int64`: Dimension of the matrix
 
@@ -20,10 +20,19 @@
 
 # Return values
 
-The return value is of the form `vectors, values = solver(…)`, where
+The return value is of the form `result = solver(…)`, where `result` is an
+`EigenPairs` object with the following fields:
 
-* `vectors::Matrix{T}`: Matrix of eigenvectors
-* `values::Vector{R}`: Vector of eigenvalues
+* `vectors::Matrix{T}`: Eigenvectors
+* `values::Vector{R}`: Eigenvalues
+* `residuals::Vector{R}`: Residual norms of the eigenvectors
+* `converged::Vector{Bool}`: Convergence flags (`converged[i] == true` if the `i` root converged)
+
+!!! warning "Check for convergence"
+
+    If `verbose==false`, no warning is printed if one or more roots fail
+    to converge. The contents of `result.converged` should therefore
+    be checked.
 
 # A note on the matrix-vector multiplication function
 
@@ -46,12 +55,12 @@ function solver(f::Function,
 
     Twork, Rwork = workarrays(T, matdim, blocksize, maxvec)
     
-    vectors, values = solver(f, diag, nroots, matdim, Twork, Rwork;
-                             tol=tol, blocksize=blocksize,
-                             maxvec=maxvec, niter=niter,
-                             verbose=verbose)
+    eigenpairs = solver(f, diag, nroots, matdim, Twork, Rwork;
+                        tol=tol, blocksize=blocksize,
+                        maxvec=maxvec, niter=niter,
+                        verbose=verbose)
     
-    return vectors, values
+    return eigenpairs
     
 end
 
@@ -67,15 +76,21 @@ function solver(f::Function,
                 niter=100,
                 verbose=false) where {T<:AllowedTypes, R<:AllowedFloat}
 
-    vectors = Matrix{T}(undef, matdim, nroots)
+    # EigenPair result
+    eigenpairs = EigenPairs{T, R}(nroots, matdim)
 
-    values = Vector{eltype(Rwork)}(undef, nroots)
+    convinfo = solver!(eigenpairs.vectors, eigenpairs.values, f, diag,
+                       nroots, matdim, Twork, Rwork;
+                       tol=tol, blocksize=blocksize, maxvec=maxvec,
+                       niter=niter, verbose=verbose, guess=false)
 
-    solver!(vectors, values, f, diag, nroots, matdim, Twork, Rwork;
-            tol=tol, blocksize=blocksize, maxvec=maxvec, niter=niter,
-            verbose=verbose, guess=false)
-
-    return vectors, values
+    # Fill in the convergence information
+    for i in 1:nroots
+        eigenpairs.residuals[i] = convinfo.residuals[i]
+        eigenpairs.converged[i] = convinfo.converged[i]
+    end
+    
+    return eigenpairs
     
 end
 
@@ -94,10 +109,12 @@ function solver!(vectors::Matrix{T},
     
     Twork, Rwork = workarrays(T, matdim, blocksize, maxvec)
     
-    solver!(vectors, values, f, diag, nroots, matdim, Twork,
-            Rwork; tol=tol, blocksize=blocksize, maxvec=maxvec,
-            niter=niter, verbose=verbose, guess=guess)
+    convinfo = solver!(vectors, values, f, diag, nroots, matdim, Twork,
+                       Rwork; tol=tol, blocksize=blocksize, maxvec=maxvec,
+                       niter=niter, verbose=verbose, guess=guess)
 
+    return convinfo
+    
 end
 
 """
@@ -121,7 +138,7 @@ The following two pre-allocated work arrays may be supplied:
 * `Twork::Vector{T}`: Type [`T<:AllowedTypes`](@ref AllowedTypes) work array
 * `Rwork::Vector{R}`: Type [`R<:AllowedFloat`](@ref AllowedFloat) work array
 
-See [Work arrays](@ref WorkArrays) for the procedure for determining the required length of thse vectors.
+See [Work arrays](@ref WorkArrays) for the procedure for constructing these.
 
 # Optional keyword arguments
 
@@ -133,6 +150,20 @@ See [Work arrays](@ref WorkArrays) for the procedure for determining the require
                    at the end of each iteration
 * `guess::Bool`: If `true`, then on input, the `vectors` array is taken to
                  contain the guess vectors
+
+# Return values
+
+The return value is of the form `result = solver!(…)`, where `result` is an
+`ConvInfo` object with the following fields:
+
+* `residuals::Vector{R}`: Residual norms of the eigenvectors
+* `converged::Vector{Bool}`: Convergence flags (`converged[i] == true` if the `i` root converged)
+
+!!! warning "Check for convergence"
+
+    If `verbose==false`, no warning is printed if one or more roots fail
+    to converge. The contents of `result.converged` should therefore
+    be checked.
 
 """
 function solver!(vectors::Matrix{T},
@@ -156,6 +187,9 @@ function solver!(vectors::Matrix{T},
     # Davidson cache
     cache = DavidsonCache{T, R}(f, diag, nroots, matdim, blocksize,
                                 maxvec, tol, niter, Twork, Rwork)
+
+    # ConvInfo result
+    convinfo = ConvInfo{R}(nroots)
     
     # Construct the guess vectors
     if guess
@@ -174,6 +208,16 @@ function solver!(vectors::Matrix{T},
     # Get the eigenvectors
     eigenvectors!(vectors, cache)
 
+    # Fill in the convergence information
+    res = rnorm(cache, 1:nroots)
+    for i in 1:nroots
+        convinfo.residuals[i] = res[i]
+        cache.iconv[i] == 1 ? convinfo.converged[i] = true :
+            convinfo.converged[i] = false
+    end
+    
+    return convinfo
+    
 end
 
 function checkinp(nroots::Int64, blocksize::Int64, maxvec::Int64,

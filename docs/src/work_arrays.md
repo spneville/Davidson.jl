@@ -2,8 +2,8 @@
 
 ## Required work arrays
 
-The in-place `solver!` function can be made essentially allocation free
-via the passing of pre-allocated work arrays.
+The in-place `solver!` function can be made _almost_ allocation free
+via the passing of optional pre-allocated work arrays.
 
 Two work vectors have to be supplied:
 

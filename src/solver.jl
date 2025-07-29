@@ -26,10 +26,10 @@
 # A note on the matrix-vector multiplication function
 
 Let the matrix whose eigenpairs are sought be denoted by `A`. The in-place
-`Function` `f` recieves takes as arguments an `AbstractMatrix` of vectors `ν`
-and an `AbstractMatrix` of matrix-vector products `Aν` that is to be computed.
-The required form of this function is detailed in
-[Matrix-Vector Multiplication](@ref matvec) section.
+`Function` `f` recieves takes as arguments an `AbstractMatrix{T}` of vectors `v`
+and an `AbstractMatrix{T}` of matrix-vector products `Av` that is to be computed,
+where [`T<:AllowedTypes`](@ref AllowedTypes). The required form of this function
+is detailed in [Matrix-vector multiplication function](@ref matvec) section.
 
 """
 function solver(f::Function,

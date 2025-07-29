@@ -2,9 +2,7 @@ using Davidson
 using Documenter
 using Pkg: Pkg
 
-# Where to get files from and where to build them
-SRCPATH = joinpath(@__DIR__, "src")
-BUILDPATH = joinpath(@__DIR__, "build")
+# Where to get files from
 ROOTPATH = joinpath(@__DIR__, "..")
 CONTINUOUS_INTEGRATION = get(ENV, "CI", nothing) == "true"
 
@@ -32,7 +30,8 @@ makedocs(;
     pages=[
         "Home" => "index.md",
         "solver" => "solver.md",
-        "Matrix-Vector Multiplication" => "matvec.md"
+        "Matrix-vector multiplication function" => "matvec.md",
+        "AllowedTypes" => "allowed_types.md"
     ],
 )
 

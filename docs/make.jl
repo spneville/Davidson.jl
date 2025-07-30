@@ -32,7 +32,8 @@ makedocs(;
         "Solvers" => "solver.md",
         "Matrix-vector multiplication function" => "matvec.md",
         "Allowed types" => "allowed_types.md",
-        "Creating work arrays" => "work_arrays.md"
+        "Creating work arrays" => "work_arrays.md",
+        "Guess vectors" => "guess_vectors.md"
     ],
 )
 

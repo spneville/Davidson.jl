@@ -51,34 +51,18 @@ function solver(f::Function,
                 blocksize=nroots+5,
                 maxvec=4*blocksize,
                 niter=100,
-                verbose=false) where T<:AllowedTypes
+                verbose=false) where {T<:AllowedTypes}
 
+    # Real type
+    T <: Allowed64 ? R = Float64 : R = Float32
+    
+    # Work arrays
     Twork, Rwork = workarrays(T, matdim, blocksize, maxvec)
     
-    eigenpairs = solver(f, diag, nroots, matdim, Twork, Rwork;
-                        tol=tol, blocksize=blocksize,
-                        maxvec=maxvec, niter=niter,
-                        verbose=verbose)
-    
-    return eigenpairs
-    
-end
-
-function solver(f::Function,
-                diag::Vector{T},
-                nroots::Int64,
-                matdim::Int64,
-                Twork::Vector{T},
-                Rwork::Vector{R};
-                tol=1e-4,
-                blocksize=nroots+5,
-                maxvec=4*blocksize,
-                niter=100,
-                verbose=false) where {T<:AllowedTypes, R<:AllowedFloat}
-
     # EigenPair result
     eigenpairs = EigenPairs{T, R}(nroots, matdim)
 
+    # Call the in-place solver
     convinfo = solver!(eigenpairs.vectors, eigenpairs.values, f, diag,
                        nroots, matdim, Twork, Rwork;
                        tol=tol, blocksize=blocksize, maxvec=maxvec,

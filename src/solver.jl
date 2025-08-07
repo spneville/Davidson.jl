@@ -51,7 +51,8 @@ function solver(f::Function,
                 blocksize=nroots+5,
                 maxvec=4*blocksize,
                 niter=100,
-                verbose=false) where {T<:AllowedTypes}
+                verbose=false,
+                kwargs...) where {T<:AllowedTypes}
 
     # Real type
     T <: Allowed64 ? R = Float64 : R = Float32
@@ -66,7 +67,8 @@ function solver(f::Function,
     convinfo = solver!(eigenpairs.vectors, eigenpairs.values, f, diag,
                        nroots, matdim, Twork, Rwork;
                        tol=tol, blocksize=blocksize, maxvec=maxvec,
-                       niter=niter, verbose=verbose, guess=false)
+                       niter=niter, verbose=verbose, guess=false,
+                       kwargs...)
 
     # Fill in the convergence information
     for i in 1:nroots
@@ -89,13 +91,15 @@ function solver!(vectors::Matrix{T},
                  maxvec=4*blocksize,
                  niter=100,
                  verbose=false,
-                 guess=false) where {T<:AllowedTypes, R<:AllowedFloat}
+                 guess=false,
+                 kwargs...) where {T<:AllowedTypes, R<:AllowedFloat}
     
     Twork, Rwork = workarrays(T, matdim, blocksize, maxvec)
     
     convinfo = solver!(vectors, values, f, diag, nroots, matdim, Twork,
                        Rwork; tol=tol, blocksize=blocksize, maxvec=maxvec,
-                       niter=niter, verbose=verbose, guess=guess)
+                       niter=niter, verbose=verbose, guess=guess,
+                       kwargs...)
 
     return convinfo
     
@@ -163,7 +167,8 @@ function solver!(vectors::Matrix{T},
                  maxvec=4*blocksize,
                  niter=100,
                  verbose=false,
-                 guess=false) where {T<:AllowedTypes, R<:AllowedFloat}
+                 guess=false,
+                 kwargs...) where {T<:AllowedTypes, R<:AllowedFloat}
 
     # Check on the input
     checkinp(nroots, blocksize, maxvec, matdim, Twork, Rwork)
@@ -183,7 +188,7 @@ function solver!(vectors::Matrix{T},
     end
         
     # Run the generalised Davidson algorithm
-    run_gendav(cache, verbose)
+    run_gendav(cache, verbose; kwargs...)
 
     # Eigenvalues
     ρ = rho(cache, 1:nroots)
@@ -339,7 +344,7 @@ function guessvec_user(cache::DavidsonCache{T},
         
 end
 
-function run_gendav(cache::Cache, verbose::Bool)
+function run_gendav(cache::Cache, verbose::Bool; kwargs...)
 
     #
     # Initialisation
@@ -357,7 +362,7 @@ function run_gendav(cache::Cache, verbose::Bool)
     for k in 1:cache.niter
 
         # Compute the σ-vectors
-        sigma_vectors(cache)
+        sigma_vectors(cache; kwargs...)
 
         # Compute the new elements in the subspace matrix
         subspace_matrix(cache)
@@ -398,7 +403,7 @@ function run_gendav(cache::Cache, verbose::Bool)
 
 end
 
-function sigma_vectors(cache::Cache)
+function sigma_vectors(cache::Cache; kwargs...)
 
     @unpack nnew, currdim, matdim = cache
     
@@ -413,8 +418,12 @@ function sigma_vectors(cache::Cache)
     # Compute the σ-vectors
     b = bvec(cache, 1:matdim, ki:kf)
     σ = sigvec(cache, 1:matdim, ki:kf)
-    
-    cache.f(b, σ)
+
+    if haskey(kwargs, :data)
+        cache.f(b, σ, kwargs[:data])
+    else
+        cache.f(b, σ)
+    end
 
 end
 

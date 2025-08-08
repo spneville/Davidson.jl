@@ -44,14 +44,15 @@ is detailed in [Matrix-vector multiplication function](@ref matvec) section.
 
 """
 function solver(f::Function,
-                diag::Vector{T},
+                diag::AbstractVector{T},
                 nroots::Int64,
                 matdim::Int64;
                 tol=1e-4,
                 blocksize=nroots+5,
                 maxvec=4*blocksize,
                 niter=100,
-                verbose=false) where {T<:AllowedTypes}
+                verbose=false,
+                kwargs...) where {T<:AllowedTypes}
 
     # Real type
     T <: Allowed64 ? R = Float64 : R = Float32
@@ -66,7 +67,8 @@ function solver(f::Function,
     convinfo = solver!(eigenpairs.vectors, eigenpairs.values, f, diag,
                        nroots, matdim, Twork, Rwork;
                        tol=tol, blocksize=blocksize, maxvec=maxvec,
-                       niter=niter, verbose=verbose, guess=false)
+                       niter=niter, verbose=verbose, guess=false,
+                       kwargs...)
 
     # Fill in the convergence information
     for i in 1:nroots
@@ -78,10 +80,10 @@ function solver(f::Function,
     
 end
 
-function solver!(vectors::Matrix{T},
-                 values::Vector{R},
+function solver!(vectors::AbstractMatrix{T},
+                 values::AbstractVector{R},
                  f::Function,
-                 diag::Vector{T},
+                 diag::AbstractVector{T},
                  nroots::Int64,
                  matdim::Int64;
                  tol=1e-4,
@@ -89,13 +91,15 @@ function solver!(vectors::Matrix{T},
                  maxvec=4*blocksize,
                  niter=100,
                  verbose=false,
-                 guess=false) where {T<:AllowedTypes, R<:AllowedFloat}
+                 guess=false,
+                 kwargs...) where {T<:AllowedTypes, R<:AllowedFloat}
     
     Twork, Rwork = workarrays(T, matdim, blocksize, maxvec)
     
     convinfo = solver!(vectors, values, f, diag, nroots, matdim, Twork,
                        Rwork; tol=tol, blocksize=blocksize, maxvec=maxvec,
-                       niter=niter, verbose=verbose, guess=guess)
+                       niter=niter, verbose=verbose, guess=guess,
+                       kwargs...)
 
     return convinfo
     
@@ -150,10 +154,10 @@ The return value is of the form `result = solver!(…)`, where `result` is an
     be checked.
 
 """
-function solver!(vectors::Matrix{T},
-                 values::Vector{R},
+function solver!(vectors::AbstractMatrix{T},
+                 values::AbstractVector{R},
                  f::Function,
-                 diag::Vector{T},
+                 diag::AbstractVector{T},
                  nroots::Int64,
                  matdim::Int64,
                  Twork::Vector{T},
@@ -163,7 +167,8 @@ function solver!(vectors::Matrix{T},
                  maxvec=4*blocksize,
                  niter=100,
                  verbose=false,
-                 guess=false) where {T<:AllowedTypes, R<:AllowedFloat}
+                 guess=false,
+                 kwargs...) where {T<:AllowedTypes, R<:AllowedFloat}
 
     # Check on the input
     checkinp(nroots, blocksize, maxvec, matdim, Twork, Rwork)
@@ -183,7 +188,7 @@ function solver!(vectors::Matrix{T},
     end
         
     # Run the generalised Davidson algorithm
-    run_gendav(cache, verbose)
+    run_gendav(cache, verbose; kwargs...)
 
     # Eigenvalues
     ρ = rho(cache, 1:nroots)
@@ -265,7 +270,7 @@ function guessvec(cache::Cache)
     # Hermitian matrix
     hii = work1(cache, 1:matdim)
     for i in 1:matdim
-        hii[i] = real(cache.diag[i])
+        @inbounds hii[i] = real(cache.diag[i])
     end
     ix = sortperm(hii)
 
@@ -273,19 +278,19 @@ function guessvec(cache::Cache)
     b = bvec(cache, 1:matdim, 1:blocksize)
     fill!(b, 0.0)
     for i in 1:cache.blocksize
-        b[ix[i],i] = 1.0
+        @inbounds b[ix[i],i] = 1.0
     end
     
 end
 
 function guessvec_user(cache::DavidsonCache{T},
-                       vectors::Matrix{T}) where T<:AllowedTypes
+                       vectors::AbstractMatrix{T}) where T<:AllowedTypes
 
     @unpack nroots, blocksize, matdim, one, zero = cache
 
     # Number of user-supplied guess vectors
     nuser = size(vectors)[2]
-
+    
     # Check on the number of user-supplied vectors
     if nuser < nroots
         @error "The no. of user-supplied guess vectors is less" *
@@ -297,13 +302,21 @@ function guessvec_user(cache::DavidsonCache{T},
             " than the block size" nuser blocksize
         exit()
     end
-    
+
+    # If there is only a single vector, then simply load that
+    # and return
+    if nuser == blocksize
+        b = bvec(cache, 1:matdim, 1:blocksize)
+        @views b[:,1] = vectors[:,1]
+        return
+    end
+        
     # The user supplies nuser guess vectors, and we need
     # blocksize guess vectors.
     # So, we need to generate nextra = blocksize - nuser
     # extra guess vectors
     nextra = blocksize - nuser
-
+    
     # Input vectors
     v = vectors
     
@@ -311,15 +324,15 @@ function guessvec_user(cache::DavidsonCache{T},
     # vectors
     g = work2(cache, 1:matdim, 1:blocksize)
     for i in 1:nuser
-        @views g[:,i] = v[:,i]
+        @inbounds @views g[:,i] = v[:,i]
     end
     for i in 1:nextra
         for j in 1:matdim
-            g[j,nuser+i] = rand()
+            @inbounds g[j,nuser+i] = rand()
         end
         @views norm = sqrt(dot(g[:,nuser+i], g[:,nuser+i]))
         for j in 1:matdim
-            g[j,nuser+i] /= norm
+            @inbounds g[j,nuser+i] /= norm
         end
         
     end
@@ -339,7 +352,7 @@ function guessvec_user(cache::DavidsonCache{T},
         
 end
 
-function run_gendav(cache::Cache, verbose::Bool)
+function run_gendav(cache::Cache, verbose::Bool; kwargs...)
 
     #
     # Initialisation
@@ -357,7 +370,7 @@ function run_gendav(cache::Cache, verbose::Bool)
     for k in 1:cache.niter
 
         # Compute the σ-vectors
-        sigma_vectors(cache)
+        sigma_vectors(cache; kwargs...)
 
         # Compute the new elements in the subspace matrix
         subspace_matrix(cache)
@@ -398,7 +411,7 @@ function run_gendav(cache::Cache, verbose::Bool)
 
 end
 
-function sigma_vectors(cache::Cache)
+function sigma_vectors(cache::Cache; kwargs...)
 
     @unpack nnew, currdim, matdim = cache
     
@@ -413,8 +426,12 @@ function sigma_vectors(cache::Cache)
     # Compute the σ-vectors
     b = bvec(cache, 1:matdim, ki:kf)
     σ = sigvec(cache, 1:matdim, ki:kf)
-    
-    cache.f(b, σ)
+
+    if haskey(kwargs, :data)
+        cache.f(b, σ, kwargs[:data])
+    else
+        cache.f(b, σ)
+    end
 
 end
 
@@ -450,7 +467,7 @@ function subspace_matrix(cache::DavidsonCache{T}) where T<:AllowedTypes
 
         for j in 1:olddim
             for i in 1:olddim
-                G[i,j] = tmp[i,j]
+                @inbounds G[i,j] = tmp[i,j]
             end
         end
 
@@ -462,8 +479,8 @@ function subspace_matrix(cache::DavidsonCache{T}) where T<:AllowedTypes
     for i in 1:currdim
         for j in 1:nnew
             j1 = currdim - nnew + j
-            G[i,j1] = bσ[i,j]
-            G[j1,i] = conj(G[i,j1])
+            @inbounds G[i,j1] = bσ[i,j]
+            @inbounds G[j1,i] = conj(G[i,j1])
         end
     end
     
@@ -488,7 +505,7 @@ function subspace_diag(cache::DavidsonCache{T}) where T<:AllowedFloat
     
     for j in 1:currdim
         for i in 1:currdim
-            a[i,j] = G[i,j]
+            @inbounds a[i,j] = G[i,j]
         end
     end
 
@@ -516,7 +533,7 @@ function subspace_diag(cache::DavidsonCache{T}) where T<:AllowedComplex
     G = Gmat(cache, 1:currdim, 1:currdim)
     for j in 1:currdim
         for i in 1:currdim
-            a[i,j] = G[i,j]
+            @inbounds a[i,j] = G[i,j]
         end
     end
 
@@ -548,7 +565,7 @@ function residual_vectors(cache::Cache)
     # (α_bar)_ik = α_ik * rho_K
     for k in 1:blocksize
         for i in 1:currdim
-            α_bar[i,k] = α[i,k] * ρ[k]
+            @inbounds α_bar[i,k] = α[i,k] * ρ[k]
         end
     end
     
@@ -581,7 +598,7 @@ function residual_vectors(cache::Cache)
 
         # Residual norm
         r = reshape(work2(cache, 1:matdim, k:k), (matdim))
-        resnorm[k] = real(sqrt(dot(r, r)))
+        @inbounds resnorm[k] = real(sqrt(dot(r, r)))
         
         # Update the convergence information
         if resnorm[k] < tol iconv[k] = 1 end
@@ -600,7 +617,7 @@ function residual_vectors(cache::Cache)
             
             b = copy!(b, r) 
             
-            ρ1[nnew] = ρ[k]
+            @inbounds ρ1[nnew] = ρ[k]
 
         end
 
@@ -655,7 +672,7 @@ function correction_vectors(cache::Cache)
         
         # Loop over elements of the correction vector
         for i in 1:matdim
-            b[i,k] = -b[i,k] / (diag[i]-ρ1[k1])
+            @inbounds b[i,k] = -b[i,k] / (diag[i]-ρ1[k1])
         end
             
     end
@@ -703,7 +720,7 @@ function subspace_vectors(cache::Cache)
 
         for i in 1:currdim
             for j in 1:matdim
-                b[j,k] -= Smat[i,k1] * b[j,i]
+                @inbounds b[j,k] -= Smat[i,k1] * b[j,i]
             end
             
         end
@@ -713,7 +730,7 @@ function subspace_vectors(cache::Cache)
         len_bk = sqrt(dot(bk, bk))
 
         for j in 1:matdim
-            bk[j] /= len_bk
+            @inbounds bk[j] /= len_bk
         end
         
     end
@@ -762,10 +779,10 @@ function invsqrt_matrix!(Ainvsq::AbstractMatrix{T},
     # Inverse square root of the input matrix
     fill!(Ainvsq, 0.0)
     for k in 1:dim
-        λinvsq = 1.0 / sqrt(abs(w[k]))
+        @inbounds λinvsq = 1.0 / sqrt(abs(w[k]))
         for j in 1:dim
             for i in 1:dim
-                Ainvsq[j,i] += A[i,k] * A[j,k] * λinvsq
+                @inbounds Ainvsq[j,i] += A[i,k] * A[j,k] * λinvsq
             end
         end
     end
@@ -798,10 +815,10 @@ function invsqrt_matrix!(Ainvsq::AbstractMatrix{T},
     # Inverse square root of the input matrix
     fill!(Ainvsq, 0.0)
     for k in 1:dim
-        λinvsq = 1.0 / sqrt(abs(w[k]))
+        @inbounds λinvsq = 1.0 / sqrt(abs(w[k]))
         for j in 1:dim
             for i in 1:dim
-                Ainvsq[j,i] += conj(A[i,k]) * A[j,k] * λinvsq
+                @inbounds Ainvsq[j,i] += conj(A[i,k]) * A[j,k] * λinvsq
             end
         end
     end
@@ -850,7 +867,7 @@ function subspace_collapse(cache::Cache)
 
 end
 
-function eigenvectors!(vectors::Matrix{T},
+function eigenvectors!(vectors::AbstractMatrix{T},
                        cache::Cache) where T<:AllowedTypes
     
     # Compute the Ritz vectors for the nroots lowest roots
